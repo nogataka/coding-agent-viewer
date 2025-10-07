@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { ExecutionService } from '../../../backend/services/src/execution/index.js';
+import { ExecutionService } from '../../../backend/dist/services/src/execution/index.js';
 import { readFile } from 'fs/promises';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';

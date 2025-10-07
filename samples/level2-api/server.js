@@ -5,9 +5,9 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import 'express-async-errors';
 import dotenv from 'dotenv';
-import { setupRoutes } from '../../backend/server/src/routes/index.js';
-import { errorHandler } from '../../backend/server/src/middleware/errorHandler.js';
-import { logger } from '../../backend/utils/src/logger.js';
+import { setupRoutes } from '../../backend/dist/server/src/routes/index.js';
+import { errorHandler } from '../../backend/dist/server/src/middleware/errorHandler.js';
+import { logger } from '../../backend/dist/utils/src/logger.js';
 
 // 環境変数を読み込み
 dotenv.config();

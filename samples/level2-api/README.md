@@ -25,6 +25,16 @@ level2-api/
     └── docker-compose.yml
 ```
 
+## 前提条件
+
+バックエンドのビルドが必要です：
+
+```bash
+# プロジェクトルートで
+cd /Users/nogataka/dev/coding-agent-viewer/backend
+npm run build
+```
+
 ## インストール
 
 ```bash

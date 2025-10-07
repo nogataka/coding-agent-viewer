@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { LogSourceFactory } from '../../../backend/services/src/logs/logSourceFactory.js';
+import { LogSourceFactory } from '../../../backend/dist/services/src/logs/logSourceFactory.js';
 
 /**
  * 指定されたプロジェクトのセッション一覧を表示
