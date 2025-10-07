@@ -1,0 +1,123 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"            # 例: v1.2.3
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Tag name (e.g., v1.2.3)"
+        required: true
+      release_name:
+        description: "Release title (defaults to tag name)"
+        required: false
+
+permissions:
+  contents: write         # Release 作成で必要
+  id-token: write         # （任意）--provenance を使う場合に必要
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.12.0
+          cache: npm
+          registry-url: https://registry.npmjs.org
+
+      - name: Install root dependencies
+        run: npm install
+
+      - name: Install workspace dependencies
+        run: npm run install:all
+
+      - name: Build backend/frontend bundles
+        run: npm run build
+
+      - name: Build NPX package assets
+        run: npm run build:npx
+
+      # 任意: タグと package.json の version を突き合わせて安全確認
+      - name: Verify tag and package version match
+        id: ver
+        run: |
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          case "${{ github.event_name }}" in
+            workflow_dispatch) TAG="${{ github.event.inputs.tag_name }}";;
+            *) TAG="${{ github.ref_name }}";;
+          esac
+          if [ "v${PKG_VERSION}" != "$TAG" ]; then
+            echo "Tag (${TAG}) and package.json version (v${PKG_VERSION}) mismatch" >&2
+            exit 1
+          fi
+          echo "version=${PKG_VERSION}" >> "$GITHUB_OUTPUT"
+
+      # 任意: すでに同じ version が公開済みならスキップ
+      - name: Skip if version already published
+        id: already
+        run: |
+          NAME=$(node -p "require('./package.json').name")
+          if npm view "$NAME@${{ steps.ver.outputs.version }}" version >/dev/null 2>&1; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+            echo "$NAME@${{ steps.ver.outputs.version }} is already published. Skipping."
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Debug npm auth token
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NPM_TOKEN" ]; then
+            echo "NPM_TOKEN is empty" >&2
+            exit 1
+          fi
+          echo "NPM_TOKEN length: ${#NPM_TOKEN}"
+          npm whoami || echo "npm whoami failed"
+
+      - name: Publish to npm
+        if: steps.already.outputs.published == 'false'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}   # ここが肝
+        run: |
+          # スコープ付きなら初回は --access public が必要
+          npm publish --access public
+          # 署名付きサプライチェーン証跡を付けたい場合は ↓
+          # npm publish --access public --provenance
+
+      - name: Determine release metadata
+        id: meta
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ github.event.inputs.tag_name }}" >> "$GITHUB_OUTPUT"
+            if [ -n "${{ github.event.inputs.release_name }}" ]; then
+              echo "name=${{ github.event.inputs.release_name }}" >> "$GITHUB_OUTPUT"
+            else
+              echo "name=${{ github.event.inputs.tag_name }}" >> "$GITHUB_OUTPUT"
+            fi
+            echo "target=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+            echo "name=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+            echo "target=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: ${{ steps.meta.outputs.name }}
+          target_commitish: ${{ steps.meta.outputs.target }}
+          body: "Automated release for ${{ steps.meta.outputs.tag }}"
+          draft: false
+          prerelease: false
+          generate_release_notes: true
