@@ -42,7 +42,7 @@ jobs:
         run: pnpm run frontend:check
 
       - name: Build SDK artifacts
-        run: pnpm run --filter packages/sdk build
+        run: pnpm run --filter @nogataka/coding-agent-viewer-sdk build
 
       - name: Build application bundles
         run: pnpm run build
