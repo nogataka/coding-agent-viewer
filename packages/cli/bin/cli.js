@@ -49,7 +49,8 @@ server.on('exit', (code, signal) => {
 });
 
 const handleShutdown = (signal) => {
-  console.log(`\n🛑 Received ${signal}, shutting down...`);
+  console.log(`
+🛑 Received ${signal}, shutting down...`);
   server.kill(signal);
 };
 
