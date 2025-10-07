@@ -87,4 +87,6 @@ coding-agent-mgr-cloud/
 sample_page/
 layout_design/
 
-docs/
+docs/*
+!docs/public/
+!docs/public/**
