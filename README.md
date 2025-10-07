@@ -147,3 +147,13 @@ While the TypeScript/Node.js version may have slightly different performance cha
 ## License
 
 See the LICENSE file for details.
+
+
+## プロジェクト構成と主要機能
+- **モノレポ構成**: `backend/`(Express + TypeScript API)、`frontend/`(Vite + React UI)、`shared/`(型定義)、`npx-cli/`(配布用CLI)が協調し、ルートのnpmスクリプトで横断的に管理します。
+- **バックエンド API**: `backend/server/src/main.ts`がヘルメットやCORS設定を行い、`/api/projects`・`/api/tasks`・`/api/task-attempts`などのルートを提供します。各ルートはログソースからプロジェクト/セッション情報を読み出し、JSONレスポンスを返します。
+- **エージェント実行管理**: `backend/services/src/execution/ExecutionService`がプロファイル定義(`profiles/*.ts`)を参照しつつnpx経由でClaude CodeやGemini CLIを起動し、環境変数とアクティブセッションを追跡します。
+- **ログ正規化と配信**: `LogSourceFactory`と各Executor用ログソースがファイルシステムのJSONLを解析し、JSON Patch形式のイベントをSSE (`/api/execution-processes/:id/normalized-logs`) 経由でフロントに送ります。
+- **フロントエンド UI**: `App.tsx`以下でプロファイル選択→プロジェクト一覧→タスク詳細までをReact Routerで構築し、`useEventSourceManager`がSSEを購読してNormalizedEntryログを可視化します。
+- **CLI 配布**: `npx-cli/bin/cli.js`はビルド済みバックエンド/フロントエンドを同梱し、ランタイム用の環境変数を設定して単一コマンドでビューアを起動できるようにします。
+- **開発時のポイント**: `npm run dev`で前後両方のサーバーを並列起動し、`npm run check`で型・Lint・フォーマットを一括検証できます。SSEやエージェント連携を触る際はローカルの`.claude/`や`.gemini/`ディレクトリがデータソースになる点に注意してください。
