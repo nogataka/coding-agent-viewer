@@ -1,6 +1,6 @@
 {
   "name": "@nogataka/coding-agent-viewer",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "bin": {
     "coding-agent-viewer": "npx-cli/bin/cli.js"
   },

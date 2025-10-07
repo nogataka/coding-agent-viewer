@@ -1,0 +1,29 @@
+{
+  "name": "coding-agent-viewer-sample-level2",
+  "version": "1.0.0",
+  "description": "Level 2 sample: API server for HTTP access",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "NODE_ENV=production node server.js",
+    "dev": "NODE_ENV=development node server.js",
+    "test:api": "node examples/test-api.js",
+    "docker:build": "docker build -t coding-agent-api:latest .",
+    "docker:run": "docker run -p 3001:3001 coding-agent-api:latest"
+  },
+  "keywords": [
+    "ai",
+    "coding-agent",
+    "api",
+    "rest",
+    "sse"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^16.4.1"
+  },
+  "devDependencies": {
+    "node-fetch": "^3.3.2"
+  }
+}
