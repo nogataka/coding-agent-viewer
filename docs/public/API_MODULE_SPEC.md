@@ -370,7 +370,7 @@ interface ApiResponse<T, E = T> {
 ### Winston Logger
 - ログレベル: 環境変数 `LOG_LEVEL` で設定可能（デフォルト: "info"）
 - フォーマット: JSON形式（タイムスタンプ、スタックトレース付き）
-- サービス名: "coding-agent-mgr"
+- サービス名: "coding-agent-viewer"
 
 ## 環境変数
 

@@ -40,7 +40,7 @@ We would prefer that ideas and changes are raised with the core team via GitHub 
 ### Project Structure
 
 ```
-coding-agent-mgr/
+coding-agent-viewer/
 ├── backend/         # Node.js/TypeScript backend
 │   ├── server/      # Express API server
 │   ├── services/    # Filesystem-based log sources & profile helpers
@@ -53,7 +53,8 @@ coding-agent-mgr/
 
 Install all dependencies:
 ```bash
-npm run install:all
+npm install
+npm run install:all   # Installs frontend, backend, and CLI packages
 ```
 
 ### Running the Development Server
@@ -94,14 +95,6 @@ npm run lint           # ESLint
 npm run format         # Prettier format
 npm run format:check   # Prettier check
 npm run typecheck      # TypeScript check
-```
-
-### Database Management
-
-```bash
-cd backend
-npm run db:migrate     # Run migrations
-npm run db:reset       # Reset database
 ```
 
 ### Environment Variables

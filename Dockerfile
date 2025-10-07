@@ -54,7 +54,7 @@ COPY --from=builder /app/frontend/dist /app/frontend/dist
 COPY --from=builder /app/shared /app/shared
 COPY --from=builder /app/assets /app/assets
 
-# Ensure data directory exists (for SQLite files, logs, etc.)
+# Ensure data directory exists (log caches, streamed artifacts, etc.)
 RUN mkdir -p /app/backend/data
 
 EXPOSE 3001

@@ -85,7 +85,6 @@ if [ ! -f ".env" ]; then
         cat > .env << EOF
 NODE_ENV=development
 PORT=3000
-DATABASE_URL=./data/coding-agent-mgr.db
 EOF
         print_success "Minimal .env file created"
     fi
@@ -125,7 +124,8 @@ echo "  npm run dev          - Start development server"
 echo "  npm run build        - Build for production"  
 echo "  npm run start        - Start production server"
 echo "  npm run check        - Run all checks (type, lint, format)"
-echo "  npm run db:reset     - Reset database"
+echo "  npm run clean         - Remove build artifacts"
+echo "  npm run clean:logs    - Remove temporary log files"
 echo ""
 echo "API endpoints will be available at:"
 echo "  http://localhost:3001/api/health    - Health check"

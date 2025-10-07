@@ -14,8 +14,6 @@
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck && npm run lint && npm run format:check",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "db:migrate": "npm run build && node dist/scripts/migrate.js",
-    "db:reset": "rm -f data/coding-agent-mgr.db && npm run dev",
     "clean": "rm -rf dist",
     "clean:logs": "rm -f *.log",
     "clean:all": "npm run clean && npm run clean:logs"

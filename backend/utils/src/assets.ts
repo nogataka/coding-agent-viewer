@@ -4,7 +4,6 @@ import * as fs from 'fs/promises';
 import {
   getCacheDir,
   getDataDir,
-  getDatabaseFilePath,
   getLogsDir,
   getProfilesFilePath,
   getTempDir,
@@ -16,9 +15,9 @@ import {
  *
  * Development: PROJECT_ROOT/dev_assets
  * Production: OS-appropriate app data directory
- * - macOS: ~/Library/Application Support/coding-agent-mgr
- * - Linux: ~/.local/share/coding-agent-mgr
- * - Windows: %APPDATA%\coding-agent-mgr
+ * - macOS: ~/Library/Application Support/coding-agent-viewer
+ * - Linux: ~/.local/share/coding-agent-viewer
+ * - Windows: %APPDATA%\coding-agent-viewer
  */
 export async function assetDir(): Promise<string> {
   return getDataDir();
@@ -36,13 +35,6 @@ export async function configPath(): Promise<string> {
  */
 export async function profilesPath(): Promise<string> {
   return getProfilesFilePath();
-}
-
-/**
- * Get the database file path
- */
-export async function databasePath(): Promise<string> {
-  return getDatabaseFilePath('db.sqlite');
 }
 
 /**

@@ -4,7 +4,7 @@
   "version": "0.0.1",
   "main": "index.js",
   "bin": {
-    "coding-agent-mgr": "bin/cli.js"
+    "coding-agent-viewer": "bin/cli.js"
   },
   "keywords": [],
   "author": "nogataka",

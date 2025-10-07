@@ -105,11 +105,11 @@ Vibe Kanban supports customization through its configuration system:
 
 ## Technical Architecture
 
-- **Backend**: Rust with Axum web framework
-- **Frontend**: React with TypeScript
-- **Database**: SQLite for local data storage
+- **Backend**: Node.js + Express (TypeScript)
+- **Frontend**: React + Vite (TypeScript)
+- **Data Source**: Filesystem-based agent logs (Claude, Cursor, Gemini, etc.)
 - **Git Integration**: Native git operations for repository management
-- **Process Management**: Tokio-based async execution monitoring
+- **Process Management**: Server-Sent Events for live updates
 
 ## Requirements
 
@@ -153,7 +153,7 @@ Vibe Kanban supports customization through its configuration system:
 **Ready to supercharge your development workflow?**
 
 ```bash
-npx coding-agent-mgr
+npx coding-agent-viewer
 ```
 
 *Start managing your projects with the power of AI coding agents today!*

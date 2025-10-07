@@ -9,7 +9,7 @@ export const logger = winston.createLogger({
     winston.format.errors({ stack: true }),
     winston.format.json()
   ),
-  defaultMeta: { service: 'coding-agent-mgr' },
+  defaultMeta: { service: 'coding-agent-viewer' },
   transports: [
     new winston.transports.Console({
       format: winston.format.combine(winston.format.colorize(), winston.format.simple())

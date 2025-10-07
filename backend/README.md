@@ -21,7 +21,7 @@ A TypeScript/Node.js backend for the Vibe Kanban project management system with 
 ### Infrastructure
 - 🛠 **Container Management**: Lightweight container system using worktrees
 - 📡 **Real-time Updates**: Server-Sent Events for live log streaming
-- 🗄️ **SQLite Database**: Reliable local storage with migrations
+- 🗂️ **Filesystem Log Ingestion**: Reads executor output from local agent directories (Claude, Cursor, Gemini, etc.)
 - 🔧 **REST API**: Comprehensive API for all operations
 
 ## Quick Start
@@ -36,7 +36,7 @@ A TypeScript/Node.js backend for the Vibe Kanban project management system with 
 ```bash
 # Clone the repository
 git clone <repository-url>
-cd coding-agent-mgr/backend
+cd coding-agent-viewer/backend
 
 # Install dependencies
 npm install
@@ -126,23 +126,16 @@ DEFAULT_EXECUTOR_PROFILE=claude-code
 ### Project Structure
 
 ```
-src/
-├── actions/           # Executor action types
-├── models/           # Database models and types
-├── routes/           # API route handlers
-├── services/         # Core business logic
-│   └── logs/         # Filesystem log sources & processors
-├── utils/            # Utility functions
-└── index.ts          # Application entry point
-```
-
-### Database Migrations
-
-The application automatically creates and migrates the SQLite database on startup. Database file is stored in `./data/coding-agent-mgr.db`.
-
-Reset database:
-```bash
-npm run db:reset
+.
+├── index.ts           # Entry point wiring up the Express server
+├── server/            # Express app, middleware, API routes
+│   └── src/
+├── services/          # Execution orchestration & log ingestion
+│   └── src/
+├── utils/             # Shared helpers (logging, runtime paths, etc.)
+│   └── src/
+├── scripts/           # Maintenance scripts and tooling
+└── assets/            # Optional runtime assets bundled for distribution
 ```
 
 ### Scripts
@@ -153,7 +146,6 @@ npm run build         # Build for production
 npm run start         # Start production server
 npm run check         # Run type checking, linting, formatting
 npm run clean         # Clean build artifacts
-npm run db:reset      # Reset database
 ```
 
 ## Architecture
@@ -197,10 +189,6 @@ Server-Sent Events provide real-time updates for:
 - Verify executor dependencies installed (e.g., `@anthropic-ai/claude-code`)
 - Check API keys in environment
 
-**Database Issues**
-- Delete `data/coding-agent-mgr.db` and restart server
-- Check file permissions on data directory
-
 **Port Already in Use**
 - Change `PORT=3001` in `.env` to different port
 - Kill existing process on port 3001
@@ -209,7 +197,6 @@ Server-Sent Events provide real-time updates for:
 
 Application logs include:
 - Server startup and initialization
-- Database queries and migrations
 - Executor communications
 - GitHub API calls
 - Container operations

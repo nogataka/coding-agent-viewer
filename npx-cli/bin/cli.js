@@ -29,7 +29,7 @@ const env = {
   CODING_AGENT_USER_CWD: process.cwd(),
 };
 
-console.log('🚀 Launching coding-agent-mgr (Node runtime)...');
+console.log('🚀 Launching coding-agent-viewer (Node runtime)...');
 console.log(`   Backend: http://localhost:${env.BACKEND_PORT}/api/health`);
 console.log('   Frontend assets served via backend');
 

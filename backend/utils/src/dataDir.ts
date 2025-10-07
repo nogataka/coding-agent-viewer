@@ -31,17 +31,17 @@ function resolveProductionDir(): string {
 
   switch (platform) {
     case 'darwin':
-      return path.join(home, 'Library', 'Application Support', 'coding-agent-mgr');
+      return path.join(home, 'Library', 'Application Support', 'coding-agent-viewer');
     case 'win32': {
       const appData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming');
-      return path.join(appData, 'coding-agent-mgr');
+      return path.join(appData, 'coding-agent-viewer');
     }
     default: {
       const xdgDataHome = process.env.XDG_DATA_HOME;
       if (xdgDataHome && xdgDataHome.trim()) {
-        return path.join(xdgDataHome, 'coding-agent-mgr');
+        return path.join(xdgDataHome, 'coding-agent-viewer');
       }
-      return path.join(home, '.local', 'share', 'coding-agent-mgr');
+      return path.join(home, '.local', 'share', 'coding-agent-viewer');
     }
   }
 }
@@ -92,10 +92,6 @@ export function getConfigFilePath(): string {
 
 export function getProfilesFilePath(): string {
   return path.join(getDataDir(), 'profiles.json');
-}
-
-export function getDatabaseFilePath(filename = 'coding-agent-mgr.db'): string {
-  return path.join(getDataDir(), filename);
 }
 
 export function getLogsDir(): string {

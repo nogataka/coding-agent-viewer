@@ -2,7 +2,7 @@
   "name": "@nogataka/coding-agent-viewer",
   "version": "0.0.1",
   "bin": {
-    "coding-agent-mgr": "npx-cli/bin/cli.js"
+    "coding-agent-viewer": "npx-cli/bin/cli.js"
   },
   "files": [
     "npx-cli/bin/cli.js",
@@ -18,7 +18,7 @@
     "backend:build": "cd backend && npm run build",
     "backend:check": "cd backend && npm run check",
     "backend:start": "cd backend && npm run start",
-    "install:all": "npm install && cd frontend && npm install && cd ../backend && npm install && cd ../npx-cli && npm install",
+    "install:all": "npm install --prefix frontend && npm install --prefix backend && npm install --prefix npx-cli",
     "build:npx": "bash ./local-build.sh",
     "build": "npm run backend:build && cd frontend && npm run build",
     "prepack": "npm run build:npx"
