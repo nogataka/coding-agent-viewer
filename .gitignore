@@ -70,9 +70,10 @@ crates/executors/bindings
 
 build-npm-package-codesign.sh
 
-npx-cli/dist/*
-!npx-cli/dist/runtime/
-!npx-cli/dist/runtime/**
+packages/cli/dist/*
+!packages/cli/dist/runtime/
+!packages/cli/dist/runtime/**
+packages/sdk/dist/
 
 # Development ports file
 .dev-ports.json
@@ -90,3 +91,4 @@ layout_design/
 docs/*
 !docs/public/
 !docs/public/**
+!docs/SDK_PUBLISHING.md

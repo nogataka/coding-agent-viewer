@@ -4,7 +4,7 @@
 
 ## 概要
 
-- **利用モジュール**: `@nogataka/coding-agent-viewer` (npm package)
+- **利用モジュール**: `@nogataka/coding-agent-viewer-sdk` (npm package)
 - **HTTP経由**: REST API + Server-Sent Events
 - **用途**: カスタムフロントエンド開発、モバイルアプリ、マイクロサービス
 
@@ -27,14 +27,14 @@ level2-api/
 
 ## インストール
 
-npmパッケージ`@nogataka/coding-agent-viewer`を使用するため、バックエンドのビルドは不要です：
+npmパッケージ`@nogataka/coding-agent-viewer-sdk`を使用するため、バックエンドのビルドは不要です：
 
 ```bash
 cd samples/level2-api
 npm install
 ```
 
-> **Note**: このサンプルは公開されたnpmパッケージ `@nogataka/coding-agent-viewer@latest` を使用します。
+> **Note**: このサンプルは公開されたnpmパッケージ `@nogataka/coding-agent-viewer-sdk@latest` を使用します。
 
 ## 起動方法
 

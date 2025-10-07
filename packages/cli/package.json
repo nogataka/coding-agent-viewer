@@ -1,0 +1,46 @@
+{
+  "name": "@nogataka/coding-agent-viewer",
+  "private": false,
+  "version": "0.0.1",
+  "main": "index.js",
+  "type": "module",
+  "bin": {
+    "coding-agent-viewer": "bin/cli.js"
+  },
+  "exports": {
+    ".": "./index.js"
+  },
+  "keywords": [],
+  "author": "nogataka",
+  "license": "",
+  "description": "NPX wrapper around coding-agent-viewer",
+  "files": [
+    "dist",
+    "bin"
+  ],
+  "dependencies": {
+    "@ltd/j-toml": "^1.38.0",
+    "@nogataka/coding-agent-viewer-sdk": "workspace:*",
+    "@octokit/rest": "^22.0.0",
+    "@sentry/node": "^8.0.0",
+    "axios": "^1.6.0",
+    "better-sqlite3": "^11.1.2",
+    "chokidar": "^3.5.3",
+    "cors": "^2.8.5",
+    "diff": "^5.1.0",
+    "dotenv": "^16.4.1",
+    "express": "^4.18.2",
+    "express-async-errors": "^3.1.1",
+    "helmet": "^7.1.0",
+    "ignore": "^5.3.0",
+    "knex": "^3.1.0",
+    "morgan": "^1.10.0",
+    "multer": "^2.0.2",
+    "simple-git": "^3.22.0",
+    "sqlite3": "^5.1.6",
+    "uuid": "^9.0.1",
+    "winston": "^3.11.0",
+    "ws": "^8.16.0",
+    "zod": "^3.22.4"
+  }
+}

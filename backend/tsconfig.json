@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "commonjs",
+    "module": "Node16",
     "lib": ["ES2022"],
     "outDir": "./dist",
     "rootDir": "./",
@@ -17,16 +17,17 @@
     "noUnusedParameters": false,
     "noImplicitReturns": false,
     "noFallthroughCasesInSwitch": true,
-    "moduleResolution": "node",
+    "moduleResolution": "node16",
     "allowSyntheticDefaultImports": true,
     "emitDecoratorMetadata": true,
-    "experimentalDecorators": true
+    "experimentalDecorators": true,
+    "paths": {
+      "@nogataka/coding-agent-viewer-sdk": ["../packages/sdk/dist/types/index.d.ts"],
+      "@nogataka/coding-agent-viewer-sdk/*": ["../packages/sdk/dist/types/*"]
+    }
   },
   "include": [
-    "*.ts",
-    "server/src/**/*",
-    "services/src/**/*",
-    "utils/src/**/*"
+    "*.ts"
   ],
   "exclude": ["node_modules", "dist"]
 }

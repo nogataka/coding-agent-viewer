@@ -5,10 +5,10 @@ set -e
 
 echo "🧪 Testing NPM package locally..."
 
-# Build the package first
-./build-npm-package.sh
+# Build the CLI package first
+npm run build:cli
 
-cd npx-cli
+cd packages/cli
 
 echo "📋 Checking files to be included..."
 npm pack --dry-run
@@ -37,6 +37,6 @@ echo "✅ NPM package test completed successfully!"
 echo ""
 echo "🎉 Your MCP server is working correctly!"
 echo "📋 Next steps:"
-echo "   1. cd npx-cli"
+echo "   1. cd packages/cli"
 echo "   2. npm publish"
 echo "   3. Users can then use: npx coding-agent-viewer --mcp with Claude Desktop"

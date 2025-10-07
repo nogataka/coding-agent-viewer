@@ -1,2 +1,6 @@
 packages:
+  - 'backend'
   - 'frontend'
+  - 'shared'
+  - 'packages/*'
+  - 'samples/*'

@@ -34,75 +34,105 @@ jobs:
           cache: npm
           registry-url: https://registry.npmjs.org
 
-      - name: Install root dependencies
-        run: npm install
+      - name: Install dependencies (workspace aware)
+        run: |
+          npm install
+          npm install --prefix packages/sdk
+          npm install --prefix packages/cli
+          npm install --prefix backend
+          npm install --prefix frontend
 
-      - name: Install workspace dependencies
-        run: npm run install:all
+      - name: Build SDK artifacts
+        run: npm run build --workspace packages/sdk
 
-      - name: Build backend/frontend bundles
+      - name: Build application bundles
         run: npm run build
 
-      - name: Build NPX package assets
-        run: npm run build:npx
+      - name: Build CLI runtime
+        run: npm run build:cli
 
-      # 追加: exportsフィールドで指定されたファイルの存在を確認
-      - name: Verify exports paths exist
+      - name: Verify artifacts exist
         run: |
-          echo "Checking if all exported files exist..."
-          cd npx-cli
-          
-          EXPORTS=(
+          echo "Checking CLI artifacts"
+          cd packages/cli
+          CLI_EXPORTS=(
+            "dist/runtime/backend/dist/index.js"
             "dist/runtime/backend/dist/services/src/execution/index.js"
-            "dist/runtime/backend/dist/services/src/execution/executionService.js"
-            "dist/runtime/backend/dist/services/src/execution/activeExecutionRegistry.js"
             "dist/runtime/backend/dist/services/src/logs/index.js"
-            "dist/runtime/backend/dist/services/src/logs/logSourceFactory.js"
             "dist/runtime/backend/dist/server/src/routes/index.js"
-            "dist/runtime/backend/dist/server/src/middleware/errorHandler.js"
             "dist/runtime/backend/dist/utils/src/logger.js"
           )
-          
           MISSING=0
-          for file in "${EXPORTS[@]}"; do
+          for file in "${CLI_EXPORTS[@]}"; do
             if [ ! -f "$file" ]; then
-              echo "❌ Missing: $file"
+              echo "❌ Missing CLI artifact: $file"
               MISSING=$((MISSING + 1))
             else
-              echo "✅ Found: $file"
+              echo "✅ Found CLI artifact: $file"
             fi
           done
-          
           if [ $MISSING -gt 0 ]; then
-            echo "Error: $MISSING file(s) missing from exports"
             exit 1
           fi
-          
-          echo "All exported files exist!"
+
+          echo "Checking SDK artifacts"
+          cd ../sdk
+          SDK_EXPORTS=(
+            "dist/esm/index.js"
+            "dist/cjs/index.js"
+            "dist/types/index.d.ts"
+            "dist/esm/services/logs/index.js"
+            "dist/esm/services/execution/index.js"
+            "dist/esm/server/routes/index.js"
+            "dist/esm/utils/logger.js"
+          )
+          MISSING=0
+          for file in "${SDK_EXPORTS[@]}"; do
+            if [ ! -f "$file" ]; then
+              echo "❌ Missing SDK artifact: $file"
+              MISSING=$((MISSING + 1))
+            else
+              echo "✅ Found SDK artifact: $file"
+            fi
+          done
+          if [ $MISSING -gt 0 ]; then
+            exit 1
+          fi
 
       # 任意: タグと package.json の version を突き合わせて安全確認
-      - name: Verify tag and package version match
+      - name: Verify tag and package versions match
         id: ver
         run: |
-          PKG_VERSION=$(node -p "require('./package.json').version")
-          case "${{ github.event_name }}" in
-            workflow_dispatch) TAG="${{ github.event.inputs.tag_name }}";;
-            *) TAG="${{ github.ref_name }}";;
-          esac
-          if [ "v${PKG_VERSION}" != "$TAG" ]; then
-            echo "Tag (${TAG}) and package.json version (v${PKG_VERSION}) mismatch" >&2
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ github.event.inputs.tag_name }}"
+          else
+            TAG="${{ github.ref_name }}"
+          fi
+
+          CLI_VERSION=$(node -p "require('./packages/cli/package.json').version")
+          SDK_VERSION=$(node -p "require('./packages/sdk/package.json').version")
+
+          if [ "v${CLI_VERSION}" != "$TAG" ]; then
+            echo "Tag (${TAG}) and packages/cli/package.json version (v${CLI_VERSION}) mismatch" >&2
             exit 1
           fi
-          echo "version=${PKG_VERSION}" >> "$GITHUB_OUTPUT"
+          if [ "v${SDK_VERSION}" != "$TAG" ]; then
+            echo "Tag (${TAG}) and packages/sdk/package.json version (v${SDK_VERSION}) mismatch" >&2
+            exit 1
+          fi
+
+          echo "cli_version=${CLI_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "sdk_version=${SDK_VERSION}" >> "$GITHUB_OUTPUT"
 
       # 任意: すでに同じ version が公開済みならスキップ
-      - name: Skip if version already published
-        id: already
+      - name: Check if SDK version already published
+        id: sdk_published
         run: |
-          NAME=$(node -p "require('./package.json').name")
-          if npm view "$NAME@${{ steps.ver.outputs.version }}" version >/dev/null 2>&1; then
+          NAME=$(node -p "require('./packages/sdk/package.json').name")
+          VERSION=${{ steps.ver.outputs.sdk_version }}
+          if npm view "$NAME@$VERSION" version >/dev/null 2>&1; then
             echo "published=true" >> "$GITHUB_OUTPUT"
-            echo "$NAME@${{ steps.ver.outputs.version }} is already published. Skipping."
+            echo "$NAME@$VERSION is already published. Skipping SDK publish."
           else
             echo "published=false" >> "$GITHUB_OUTPUT"
           fi
@@ -118,15 +148,33 @@ jobs:
           echo "NPM_TOKEN length: ${#NPM_TOKEN}"
           npm whoami || echo "npm whoami failed"
 
-      - name: Publish to npm
-        if: steps.already.outputs.published == 'false'
+      - name: Publish SDK to npm
+        if: steps.sdk_published.outputs.published == 'false'
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}   # ここが肝
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          # スコープ付きなら初回は --access public が必要
+          cd packages/sdk
           npm publish --access public
-          # 署名付きサプライチェーン証跡を付けたい場合は ↓
-          # npm publish --access public --provenance
+
+      - name: Check if CLI version already published
+        id: cli_published
+        run: |
+          NAME=$(node -p "require('./packages/cli/package.json').name")
+          VERSION=${{ steps.ver.outputs.cli_version }}
+          if npm view "$NAME@$VERSION" version >/dev/null 2>&1; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+            echo "$NAME@$VERSION is already published. Skipping CLI publish."
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish CLI to npm
+        if: steps.cli_published.outputs.published == 'false'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          cd packages/cli
+          npm publish --access public
 
       - name: Determine release metadata
         id: meta

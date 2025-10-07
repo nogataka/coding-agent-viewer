@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import React, { useState, useEffect } from 'react';
 import { Box, Text, useInput, useApp, render } from 'ink';
-import { LogSourceFactory } from '@nogataka/coding-agent-viewer/services/logs';
-import { ExecutionService } from '@nogataka/coding-agent-viewer/services/execution';
+import { LogSourceFactory } from '@nogataka/coding-agent-viewer-sdk/services/logs';
+import { ExecutionService } from '@nogataka/coding-agent-viewer-sdk/services/execution';
 
 // Types
 interface Project {
@@ -431,4 +431,3 @@ function getProfileIcon(profile: string): string {
 
 // Render the app
 render(<App />);
-

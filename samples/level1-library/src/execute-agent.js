@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { ExecutionService } from '@nogataka/coding-agent-viewer/services/execution';
+import { ExecutionService } from '@nogataka/coding-agent-viewer-sdk/services/execution';
 import { readFile } from 'fs/promises';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';

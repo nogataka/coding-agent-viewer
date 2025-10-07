@@ -27,11 +27,13 @@ jobs:
           node-version: 20.12.0
           cache: 'npm'
 
-      - name: Install root dependencies
-        run: npm install
-
-      - name: Install workspace dependencies
-        run: npm run install:all
+      - name: Install dependencies (workspace aware)
+        run: |
+          npm install
+          npm install --prefix packages/sdk
+          npm install --prefix packages/cli
+          npm install --prefix backend
+          npm install --prefix frontend
 
       - name: Backend checks
         run: npm run backend:check
@@ -39,41 +41,61 @@ jobs:
       - name: Frontend checks
         run: npm run frontend:check
 
+      - name: Build SDK artifacts
+        run: npm run build --workspace packages/sdk
+
       - name: Build application bundles
         run: npm run build
 
-      - name: Build NPX package assets
-        run: npm run build:npx
+      - name: Build CLI runtime
+        run: npm run build:cli
 
       - name: Verify exports paths exist
         run: |
           echo "Checking if all exported files exist..."
-          cd npx-cli
           
-          EXPORTS=(
+          echo "# Checking CLI export targets"
+          cd packages/cli
+          CLI_EXPORTS=(
+            "dist/runtime/backend/dist/index.js"
             "dist/runtime/backend/dist/services/src/execution/index.js"
-            "dist/runtime/backend/dist/services/src/execution/executionService.js"
-            "dist/runtime/backend/dist/services/src/execution/activeExecutionRegistry.js"
             "dist/runtime/backend/dist/services/src/logs/index.js"
-            "dist/runtime/backend/dist/services/src/logs/logSourceFactory.js"
             "dist/runtime/backend/dist/server/src/routes/index.js"
-            "dist/runtime/backend/dist/server/src/middleware/errorHandler.js"
             "dist/runtime/backend/dist/utils/src/logger.js"
           )
-          
           MISSING=0
-          for file in "${EXPORTS[@]}"; do
+          for file in "${CLI_EXPORTS[@]}"; do
             if [ ! -f "$file" ]; then
-              echo "❌ Missing: $file"
+              echo "❌ Missing CLI artifact: $file"
               MISSING=$((MISSING + 1))
             else
-              echo "✅ Found: $file"
+              echo "✅ Found CLI artifact: $file"
             fi
           done
-          
           if [ $MISSING -gt 0 ]; then
-            echo "Error: $MISSING file(s) missing from exports"
             exit 1
           fi
-          
-          echo "All exported files exist!"
+
+          echo "# Checking SDK export targets"
+          cd ../sdk
+          SDK_EXPORTS=(
+            "dist/esm/index.js"
+            "dist/cjs/index.js"
+            "dist/types/index.d.ts"
+            "dist/esm/services/logs/index.js"
+            "dist/esm/services/execution/index.js"
+            "dist/esm/server/routes/index.js"
+            "dist/esm/utils/logger.js"
+          )
+          MISSING=0
+          for file in "${SDK_EXPORTS[@]}"; do
+            if [ ! -f "$file" ]; then
+              echo "❌ Missing SDK artifact: $file"
+              MISSING=$((MISSING + 1))
+            else
+              echo "✅ Found SDK artifact: $file"
+            fi
+          done
+          if [ $MISSING -gt 0 ]; then
+            exit 1
+          fi

@@ -13,15 +13,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     rm -rf /var/lib/apt/lists/*
 
 # Copy manifest files first to leverage Docker layer caching
-COPY package.json package-lock.json ./
-COPY frontend/package.json frontend/package-lock.json frontend/
-COPY backend/package.json backend/package-lock.json backend/
-COPY npx-cli/package.json npx-cli/package-lock.json npx-cli/
+COPY package.json ./
+COPY frontend/package.json frontend/
+COPY backend/package.json backend/
+COPY packages/cli/package.json packages/cli/
+COPY packages/sdk/package.json packages/sdk/
 
 # Install dependencies for each workspace
-RUN npm ci
-RUN cd frontend && npm ci
-RUN cd backend && npm ci
+RUN npm install
+RUN cd frontend && npm install
+RUN cd backend && npm install
+RUN cd packages/sdk && npm install
+RUN cd packages/cli && npm install
 
 # Copy full repository contents
 COPY . .

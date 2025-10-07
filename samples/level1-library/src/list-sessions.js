@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { LogSourceFactory } from '@nogataka/coding-agent-viewer/services/logs';
+import { LogSourceFactory } from '@nogataka/coding-agent-viewer-sdk/services/logs';
 
 /**
  * 指定されたプロジェクトのセッション一覧を表示

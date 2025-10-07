@@ -1,0 +1,100 @@
+{
+  "name": "@nogataka/coding-agent-viewer-sdk",
+  "version": "0.0.1",
+  "description": "SDK for interacting with coding-agent-viewer services and execution helpers.",
+  "type": "module",
+  "main": "dist/cjs/index.js",
+  "module": "dist/esm/index.js",
+  "types": "dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js",
+      "types": "./dist/types/index.d.ts"
+    },
+    "./services/logs": {
+      "import": "./dist/esm/services/logs/index.js",
+      "require": "./dist/cjs/services/logs/index.js",
+      "types": "./dist/types/services/logs/index.d.ts"
+    },
+    "./services/logs/*": {
+      "import": "./dist/esm/services/logs/*.js",
+      "require": "./dist/cjs/services/logs/*.js",
+      "types": "./dist/types/services/logs/*.d.ts"
+    },
+    "./services/execution": {
+      "import": "./dist/esm/services/execution/index.js",
+      "require": "./dist/cjs/services/execution/index.js",
+      "types": "./dist/types/services/execution/index.d.ts"
+    },
+    "./services/execution/*": {
+      "import": "./dist/esm/services/execution/*.js",
+      "require": "./dist/cjs/services/execution/*.js",
+      "types": "./dist/types/services/execution/*.d.ts"
+    },
+    "./utils": {
+      "import": "./dist/esm/utils/index.js",
+      "require": "./dist/cjs/utils/index.js",
+      "types": "./dist/types/utils/index.d.ts"
+    },
+    "./utils/*": {
+      "import": "./dist/esm/utils/*.js",
+      "require": "./dist/cjs/utils/*.js",
+      "types": "./dist/types/utils/*.d.ts"
+    },
+    "./server/main": {
+      "import": "./dist/esm/server/main.js",
+      "require": "./dist/cjs/server/main.js",
+      "types": "./dist/types/server/main.d.ts"
+    },
+    "./server/routes": {
+      "import": "./dist/esm/server/routes/index.js",
+      "require": "./dist/cjs/server/routes/index.js",
+      "types": "./dist/types/server/routes/index.d.ts"
+    },
+    "./server/routes/*": {
+      "import": "./dist/esm/server/routes/*.js",
+      "require": "./dist/cjs/server/routes/*.js",
+      "types": "./dist/types/server/routes/*.d.ts"
+    },
+    "./server/middleware/*": {
+      "import": "./dist/esm/server/middleware/*.js",
+      "require": "./dist/cjs/server/middleware/*.js",
+      "types": "./dist/types/server/middleware/*.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "npm run build:clean && npm run build:esm && npm run build:cjs && npm run build:types",
+    "build:clean": "rm -rf dist",
+    "build:esm": "tsc -p tsconfig.esm.json",
+    "build:cjs": "tsc -p tsconfig.cjs.json",
+    "build:types": "tsc -p tsconfig.types.json"
+  },
+  "dependencies": {
+    "@ltd/j-toml": "^1.38.0",
+    "@octokit/rest": "^22.0.0",
+    "@sentry/node": "^8.0.0",
+    "axios": "^1.6.0",
+    "better-sqlite3": "^11.1.2",
+    "chokidar": "^3.5.3",
+    "cors": "^2.8.5",
+    "diff": "^5.1.0",
+    "dotenv": "^16.4.1",
+    "express": "^4.18.2",
+    "express-async-errors": "^3.1.1",
+    "helmet": "^7.1.0",
+    "ignore": "^5.3.0",
+    "knex": "^3.1.0",
+    "morgan": "^1.10.0",
+    "multer": "^2.0.2",
+    "simple-git": "^3.22.0",
+    "sqlite3": "^5.1.6",
+    "uuid": "^9.0.1",
+    "winston": "^3.11.0",
+    "ws": "^8.16.0",
+    "zod": "^3.22.4"
+  }
+}

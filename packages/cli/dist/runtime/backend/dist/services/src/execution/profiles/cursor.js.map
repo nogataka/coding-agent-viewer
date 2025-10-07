@@ -1,0 +1,1 @@
+{"version":3,"file":"cursor.js","sourceRoot":"","sources":["../../../../../services/src/execution/profiles/cursor.ts"],"names":[],"mappings":"AAEA,MAAM,CAAC,MAAM,aAAa,GAAsB;IAC9C,KAAK,EAAE,QAAQ;IACf,OAAO,EAAE;QACP,MAAM,EAAE,cAAc;QACtB,IAAI,EAAE,CAAC,IAAI,EAAE,6BAA6B,EAAE,SAAS,CAAC;KACvD;CACF,CAAC"}

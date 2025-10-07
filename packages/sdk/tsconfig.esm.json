@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "module": "Node16",
+    "outDir": "dist/esm",
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": true
+  }
+}

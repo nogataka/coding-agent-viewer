@@ -15,8 +15,8 @@
 
 **使用モジュール**:
 ```javascript
-import { ExecutionService } from '@nogataka/coding-agent-viewer/services/execution';
-import { LogSourceFactory } from '@nogataka/coding-agent-viewer/services/logs';
+import { ExecutionService } from '@nogataka/coding-agent-viewer-sdk/services/execution';
+import { LogSourceFactory } from '@nogataka/coding-agent-viewer-sdk/services/logs';
 ```
 
 **起動方法**:
@@ -45,8 +45,8 @@ node cli.js --help
 
 **使用モジュール**:
 ```javascript
-import { setupRoutes } from '@nogataka/coding-agent-viewer/server/routes';
-import { errorHandler } from '@nogataka/coding-agent-viewer/server/middleware/errorHandler.js';
+import { setupRoutes } from '@nogataka/coding-agent-viewer-sdk/server/routes';
+import { errorHandler } from '@nogataka/coding-agent-viewer-sdk/server/middleware/errorHandler.js';
 ```
 内部で `services/execution` と `services/logs` を使用
 
@@ -262,7 +262,7 @@ FRONTEND_PORT=3000
 
 ### npmパッケージの使用
 
-Level 1とLevel 2のサンプルは公開されたnpmパッケージ `@nogataka/coding-agent-viewer@latest` を使用します。
+Level 1とLevel 2のサンプルは公開されたnpmパッケージ `@nogataka/coding-agent-viewer-sdk@latest` を使用します。
 
 **バックエンドのビルドは不要**です。各サンプルディレクトリで `npm install` するだけで動作します。
 

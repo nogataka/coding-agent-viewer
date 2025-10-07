@@ -3,12 +3,12 @@
 set -euo pipefail
 
 ROOT_DIR=$(cd "$(dirname "$0")" && pwd)
-RUNTIME_DIR="$ROOT_DIR/npx-cli/dist/runtime"
+RUNTIME_DIR="$ROOT_DIR/packages/cli/dist/runtime"
 BACKEND_RUNTIME="$RUNTIME_DIR/backend"
 FRONTEND_RUNTIME="$RUNTIME_DIR/frontend"
 
 echo "🧹 Cleaning previous builds..."
-rm -rf "$ROOT_DIR/npx-cli/dist"
+rm -rf "$ROOT_DIR/packages/cli/dist"
 mkdir -p "$BACKEND_RUNTIME" "$FRONTEND_RUNTIME"
 
 echo "🔨 Building backend (TypeScript)..."
@@ -39,4 +39,4 @@ fi
 mkdir -p "$FRONTEND_RUNTIME/dist"
 cp -R "$ROOT_DIR/frontend/dist/"* "$FRONTEND_RUNTIME/dist"
 
-echo "✅ Runtime prepared under npx-cli/dist/runtime"
+echo "✅ Runtime prepared under packages/cli/dist/runtime"

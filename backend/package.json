@@ -19,6 +19,7 @@
     "clean:all": "npm run clean && npm run clean:logs"
   },
   "dependencies": {
+    "@nogataka/coding-agent-viewer-sdk": "workspace:*",
     "@ltd/j-toml": "^1.38.0",
     "@octokit/rest": "^22.0.0",
     "@sentry/node": "^8.0.0",

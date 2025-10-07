@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-import { LogSourceFactory } from '@nogataka/coding-agent-viewer/services/logs';
-import { ExecutionService } from '@nogataka/coding-agent-viewer/services/execution';
-import { activeExecutionRegistry } from '@nogataka/coding-agent-viewer/services/execution/activeExecutionRegistry.js';
+import { LogSourceFactory } from '@nogataka/coding-agent-viewer-sdk/services/logs';
+import { ExecutionService } from '@nogataka/coding-agent-viewer-sdk/services/execution';
+import { activeExecutionRegistry } from '@nogataka/coding-agent-viewer-sdk/services/execution/activeExecutionRegistry.js';
 import chalk from 'chalk';
 import ora from 'ora';
 import inquirer from 'inquirer';

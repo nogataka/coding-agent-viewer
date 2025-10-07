@@ -11,7 +11,7 @@ Coding Agent Viewerは、Claude Code、Cursor、Gemini、Codexなどの複数の
 このプロジェクトの**最大の特徴は、npmパッケージとしてSDKを提供**していることです：
 
 ```bash
-npm install @nogataka/coding-agent-viewer
+npm install @nogataka/coding-agent-viewer-sdk
 ```
 
 3つのコアモジュールをライブラリとして利用可能：
@@ -56,13 +56,13 @@ SDKを直接利用してCLIツールやアプリケーションに組み込み�
 
 ```bash
 # インストール
-npm install @nogataka/coding-agent-viewer
+npm install @nogataka/coding-agent-viewer-sdk
 ```
 
 ```javascript
 // 使用例
-import { ExecutionService } from '@nogataka/coding-agent-viewer/services/execution';
-import { LogSourceFactory } from '@nogataka/coding-agent-viewer/services/logs';
+import { ExecutionService } from '@nogataka/coding-agent-viewer-sdk/services/execution';
+import { LogSourceFactory } from '@nogataka/coding-agent-viewer-sdk/services/logs';
 
 const executor = new ExecutionService();
 const logFactory = new LogSourceFactory();
@@ -91,13 +91,13 @@ REST API + SSEを提供するバックエンドサーバー：
 
 ```bash
 # インストール
-npm install @nogataka/coding-agent-viewer
+npm install @nogataka/coding-agent-viewer-sdk
 ```
 
 ```javascript
 // サーバー起動
 import express from 'express';
-import { setupRoutes } from '@nogataka/coding-agent-viewer/server/routes';
+import { setupRoutes } from '@nogataka/coding-agent-viewer-sdk/server/routes';
 
 const app = express();
 setupRoutes(app);
@@ -205,13 +205,12 @@ npm run dev
 
 ```
 coding-agent-viewer/
-├── backend/           # TypeScript バックエンド
-│   ├── server/        # Express API サーバー
-│   ├── services/      # Execution & Log モジュール
-│   └── utils/         # 共有ユーティリティ
+├── backend/           # TypeScript バックエンド (サーバーエントリ)
+├── packages/
+│   ├── cli/           # CLI 配布パッケージ (@nogataka/coding-agent-viewer)
+│   └── sdk/           # SDK / ライブラリ (@nogataka/coding-agent-viewer-sdk)
 ├── frontend/          # React UI (Vite)
 ├── shared/            # 共有型定義
-├── npx-cli/           # CLI配布パッケージ
 ├── samples/           # サンプルアプリケーション
 │   ├── level1-library/   # SDK直接利用
 │   ├── level2-api/       # APIサーバー
@@ -274,28 +273,33 @@ npm run typecheck
 
 ## 📦 npmパッケージ
 
-このプロジェクトは以下のパッケージとして公開されています：
+このプロジェクトは以下の2つのパッケージを提供します：
+
+- **CLI**（ランタイム同梱）: `@nogataka/coding-agent-viewer`
+- **SDK**（ライブラリ/API）: `@nogataka/coding-agent-viewer-sdk`
+
+ライブラリとして利用する場合は SDK をインストールしてください:
 
 ```bash
-npm install @nogataka/coding-agent-viewer
+npm install @nogataka/coding-agent-viewer-sdk
 ```
 
-### エクスポートされるモジュール
+### SDK で利用できるモジュール
 
 ```javascript
 // Execution Module
-import { ExecutionService } from '@nogataka/coding-agent-viewer/services/execution';
-import { activeExecutionRegistry } from '@nogataka/coding-agent-viewer/services/execution/activeExecutionRegistry.js';
+import { ExecutionService } from '@nogataka/coding-agent-viewer-sdk/services/execution';
+import { activeExecutionRegistry } from '@nogataka/coding-agent-viewer-sdk/services/execution/activeExecutionRegistry.js';
 
 // Log Module
-import { LogSourceFactory } from '@nogataka/coding-agent-viewer/services/logs';
+import { LogSourceFactory } from '@nogataka/coding-agent-viewer-sdk/services/logs';
 
 // API Module
-import { setupRoutes } from '@nogataka/coding-agent-viewer/server/routes';
-import { errorHandler } from '@nogataka/coding-agent-viewer/server/middleware/errorHandler.js';
+import { setupRoutes } from '@nogataka/coding-agent-viewer-sdk/server/routes';
+import { errorHandler } from '@nogataka/coding-agent-viewer-sdk/server/middleware/errorHandler.js';
 
 // Utils
-import { logger } from '@nogataka/coding-agent-viewer/utils/logger.js';
+import { logger } from '@nogataka/coding-agent-viewer-sdk/utils/logger.js';
 ```
 
 **シンプルで直感的なインポートパス**を提供：
@@ -323,7 +327,8 @@ import { logger } from '@nogataka/coding-agent-viewer/utils/logger.js';
 
 - **ドキュメント**: [`docs/public/`](./docs/public/)
 - **サンプル**: [`samples/`](./samples/)
-- **npm**: `@nogataka/coding-agent-viewer`
+- **CLI (npm)**: `@nogataka/coding-agent-viewer`
+- **SDK (npm)**: `@nogataka/coding-agent-viewer-sdk`
 - **Issue報告**: [GitHub Issues](https://github.com/your-org/coding-agent-viewer/issues)
 
 ---

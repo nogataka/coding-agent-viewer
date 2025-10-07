@@ -5,9 +5,9 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import 'express-async-errors';
 import dotenv from 'dotenv';
-import { setupRoutes } from '@nogataka/coding-agent-viewer/server/routes';
-import { errorHandler } from '@nogataka/coding-agent-viewer/server/middleware/errorHandler.js';
-import { logger } from '@nogataka/coding-agent-viewer/utils/logger.js';
+import { setupRoutes } from '@nogataka/coding-agent-viewer-sdk/server/routes';
+import { errorHandler } from '@nogataka/coding-agent-viewer-sdk/server/middleware/errorHandler.js';
+import { logger } from '@nogataka/coding-agent-viewer-sdk/utils/logger.js';
 
 // 環境変数を読み込み
 dotenv.config();

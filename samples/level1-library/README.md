@@ -9,7 +9,7 @@
 
 ## 概要
 
-- **利用モジュール**: `@nogataka/coding-agent-viewer` (npm package)
+- **利用モジュール**: `@nogataka/coding-agent-viewer-sdk` (npm package)
 - **HTTP不要**: APIサーバーなし
 - **3つのCLI**: Ink版、Simple版、Command版
 - **用途**: CLIツール、バッチ処理、CI/CD、他アプリへの組み込み
@@ -32,14 +32,14 @@ level1-library/
 
 ## インストール
 
-npmパッケージ`@nogataka/coding-agent-viewer`を使用するため、バックエンドのビルドは不要です：
+npmパッケージ`@nogataka/coding-agent-viewer-sdk`を使用するため、バックエンドのビルドは不要です：
 
 ```bash
 cd samples/level1-library
 npm install
 ```
 
-> **Note**: このサンプルは公開されたnpmパッケージ `@nogataka/coding-agent-viewer@latest` を使用します。
+> **Note**: このサンプルは公開されたnpmパッケージ `@nogataka/coding-agent-viewer-sdk@latest` を使用します。
 
 ## 使用方法
 
@@ -296,7 +296,7 @@ SDKとしてライブラリを直接利用する方法：
 ### ExecutionService
 
 ```javascript
-import { ExecutionService } from '@nogataka/coding-agent-viewer/services/execution';
+import { ExecutionService } from '@nogataka/coding-agent-viewer-sdk/services/execution';
 
 const executor = new ExecutionService();
 
@@ -318,7 +318,7 @@ console.log('Process ID:', result.processId);
 ### LogSourceFactory
 
 ```javascript
-import { LogSourceFactory } from '@nogataka/coding-agent-viewer/services/logs';
+import { LogSourceFactory } from '@nogataka/coding-agent-viewer-sdk/services/logs';
 
 const factory = new LogSourceFactory();
 
