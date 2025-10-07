@@ -149,8 +149,7 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          cd packages/sdk
-          npm publish --access public
+          pnpm publish --filter @nogataka/coding-agent-viewer-sdk --access public --no-git-checks
 
       - name: Check if CLI version already published
         id: cli_published
@@ -169,8 +168,7 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          cd packages/cli
-          npm publish --access public
+          pnpm publish --filter @nogataka/coding-agent-viewer --access public --no-git-checks
 
       - name: Determine release metadata
         id: meta
