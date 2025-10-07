@@ -1,5 +1,5 @@
 {
-  "name": "coding-agent-mgr-backend",
+  "name": "coding-agent-viewer-backend",
   "version": "0.0.1",
   "description": "Vibe Kanban backend server",
   "main": "dist/index.js",
