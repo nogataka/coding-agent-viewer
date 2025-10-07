@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { LogSourceFactory } from '../../../backend/dist/services/src/logs/logSourceFactory.js';
+import { LogSourceFactory } from '@nogataka/coding-agent-viewer/services/logs';
 
 /**
  * セッションのログをストリーミング表示

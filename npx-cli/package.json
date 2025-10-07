@@ -3,8 +3,25 @@
   "private": false,
   "version": "0.0.1",
   "main": "index.js",
+  "type": "module",
   "bin": {
     "coding-agent-viewer": "bin/cli.js"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./services/execution": "./dist/runtime/backend/dist/services/src/execution/index.js",
+    "./services/execution/index.js": "./dist/runtime/backend/dist/services/src/execution/index.js",
+    "./services/execution/executionService.js": "./dist/runtime/backend/dist/services/src/execution/executionService.js",
+    "./services/execution/activeExecutionRegistry.js": "./dist/runtime/backend/dist/services/src/execution/activeExecutionRegistry.js",
+    "./services/execution/profileRegistry.js": "./dist/runtime/backend/dist/services/src/execution/profileRegistry.js",
+    "./services/logs": "./dist/runtime/backend/dist/services/src/logs/index.js",
+    "./services/logs/logSourceFactory.js": "./dist/runtime/backend/dist/services/src/logs/logSourceFactory.js",
+    "./services/logs/logSourceStrategy.js": "./dist/runtime/backend/dist/services/src/logs/logSourceStrategy.js",
+    "./server/routes": "./dist/runtime/backend/dist/server/src/routes/index.js",
+    "./server/routes/index.js": "./dist/runtime/backend/dist/server/src/routes/index.js",
+    "./server/middleware/errorHandler.js": "./dist/runtime/backend/dist/server/src/middleware/errorHandler.js",
+    "./utils/logger.js": "./dist/runtime/backend/dist/utils/src/logger.js",
+    "./utils/portFile.js": "./dist/runtime/backend/dist/utils/src/portFile.js"
   },
   "keywords": [],
   "author": "nogataka",

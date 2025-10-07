@@ -4,7 +4,7 @@
 
 ## 概要
 
-- **利用モジュール**: `api-module` (内部で `execution-module`, `log-module` を使用)
+- **利用モジュール**: `@nogataka/coding-agent-viewer` (npm package)
 - **HTTP経由**: REST API + Server-Sent Events
 - **用途**: カスタムフロントエンド開発、モバイルアプリ、マイクロサービス
 
@@ -25,22 +25,16 @@ level2-api/
     └── docker-compose.yml
 ```
 
-## 前提条件
-
-バックエンドのビルドが必要です：
-
-```bash
-# プロジェクトルートで
-cd /Users/nogataka/dev/coding-agent-viewer/backend
-npm run build
-```
-
 ## インストール
+
+npmパッケージ`@nogataka/coding-agent-viewer`を使用するため、バックエンドのビルドは不要です：
 
 ```bash
 cd samples/level2-api
 npm install
 ```
+
+> **Note**: このサンプルは公開されたnpmパッケージ `@nogataka/coding-agent-viewer@latest` を使用します。
 
 ## 起動方法
 

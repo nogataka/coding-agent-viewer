@@ -46,6 +46,40 @@ jobs:
       - name: Build NPX package assets
         run: npm run build:npx
 
+      # 追加: exportsフィールドで指定されたファイルの存在を確認
+      - name: Verify exports paths exist
+        run: |
+          echo "Checking if all exported files exist..."
+          cd npx-cli
+          
+          EXPORTS=(
+            "dist/runtime/backend/dist/services/src/execution/index.js"
+            "dist/runtime/backend/dist/services/src/execution/executionService.js"
+            "dist/runtime/backend/dist/services/src/execution/activeExecutionRegistry.js"
+            "dist/runtime/backend/dist/services/src/logs/index.js"
+            "dist/runtime/backend/dist/services/src/logs/logSourceFactory.js"
+            "dist/runtime/backend/dist/server/src/routes/index.js"
+            "dist/runtime/backend/dist/server/src/middleware/errorHandler.js"
+            "dist/runtime/backend/dist/utils/src/logger.js"
+          )
+          
+          MISSING=0
+          for file in "${EXPORTS[@]}"; do
+            if [ ! -f "$file" ]; then
+              echo "❌ Missing: $file"
+              MISSING=$((MISSING + 1))
+            else
+              echo "✅ Found: $file"
+            fi
+          done
+          
+          if [ $MISSING -gt 0 ]; then
+            echo "Error: $MISSING file(s) missing from exports"
+            exit 1
+          fi
+          
+          echo "All exported files exist!"
+
       # 任意: タグと package.json の version を突き合わせて安全確認
       - name: Verify tag and package version match
         id: ver

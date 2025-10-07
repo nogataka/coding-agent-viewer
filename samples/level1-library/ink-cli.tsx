@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import React, { useState, useEffect } from 'react';
 import { Box, Text, useInput, useApp, render } from 'ink';
-import { LogSourceFactory } from '../../backend/dist/services/src/logs/logSourceFactory.js';
-import { ExecutionService } from '../../backend/dist/services/src/execution/index.js';
+import { LogSourceFactory } from '@nogataka/coding-agent-viewer/services/logs';
+import { ExecutionService } from '@nogataka/coding-agent-viewer/services/execution';
 
 // Types
 interface Project {

@@ -14,8 +14,10 @@
 - ✅ フルコントロール
 
 **使用モジュール**:
-- `execution-module`
-- `log-module`
+```javascript
+import { ExecutionService } from '@nogataka/coding-agent-viewer/services/execution';
+import { LogSourceFactory } from '@nogataka/coding-agent-viewer/services/logs';
+```
 
 **起動方法**:
 ```bash
@@ -42,7 +44,11 @@ node cli.js --help
 - ✅ Docker対応
 
 **使用モジュール**:
-- `api-module` (内部で `execution-module`, `log-module` を使用)
+```javascript
+import { setupRoutes } from '@nogataka/coding-agent-viewer/server/routes';
+import { errorHandler } from '@nogataka/coding-agent-viewer/server/middleware/errorHandler.js';
+```
+内部で `services/execution` と `services/logs` を使用
 
 **起動方法**:
 ```bash
@@ -72,9 +78,9 @@ npm run dev
 - ✅ 完全なWebアプリ
 
 **使用モジュール**:
-- `frontend`
-- `api-module`
-- (内部で `execution-module`, `log-module`)
+- React製フロントエンド
+- APIサーバー（`server/routes`）
+- 内部で `services/execution` と `services/logs` を使用
 
 **起動方法**:
 ```bash
@@ -167,24 +173,20 @@ npm start
 ### 全サンプルを試す
 
 ```bash
-# まずバックエンドをビルド
-cd /Users/nogataka/dev/coding-agent-viewer/backend
-npm run build
-
-# Level 1
-cd ../samples/level1-library
+# Level 1（ライブラリとして直接利用）
+cd /Users/nogataka/dev/coding-agent-viewer/samples/level1-library
 npm install
-node cli.js list-projects
+npm run ink  # または npm run simple
 
-# Level 2
-cd ../level2-api
+# Level 2（APIサーバー）
+cd /Users/nogataka/dev/coding-agent-viewer/samples/level2-api
 npm install
 npm run dev
 # 別ターミナルで
 npm run test:api
 
-# Level 3
-cd ../level3-fullstack
+# Level 3（フルスタック）
+cd /Users/nogataka/dev/coding-agent-viewer/samples/level3-fullstack
 npm install
 npm start
 # → ブラウザが開く
@@ -258,25 +260,17 @@ BACKEND_PORT=3001
 FRONTEND_PORT=3000
 ```
 
-### 共通の依存関係
+### npmパッケージの使用
 
-すべてのサンプルは親ディレクトリの `backend/` と `frontend/` に依存しています。
+Level 1とLevel 2のサンプルは公開されたnpmパッケージ `@nogataka/coding-agent-viewer@latest` を使用します。
 
-最初に親ディレクトリで依存関係をインストールし、**バックエンドをビルド**：
+**バックエンドのビルドは不要**です。各サンプルディレクトリで `npm install` するだけで動作します。
 
-```bash
-cd /Users/nogataka/dev/coding-agent-viewer
-
-# 依存関係のインストール
-npm run install:all
-
-# バックエンドのビルド（重要！）
-cd backend
-npm run build
-cd ..
-```
-
-ビルドにより `backend/dist/` ディレクトリにJavaScriptファイルが生成されます。
+> **Note**: Level 3 (Full-stack) のみ、親ディレクトリの `backend/` と `frontend/` を直接起動するため、それらの依存関係インストールが必要です：
+> ```bash
+> cd /Users/nogataka/dev/coding-agent-viewer
+> npm run install:all
+> ```
 
 ---
 
