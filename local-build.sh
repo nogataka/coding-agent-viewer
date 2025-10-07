@@ -9,6 +9,7 @@ FRONTEND_RUNTIME="$RUNTIME_DIR/frontend"
 
 echo "🧹 Cleaning previous builds..."
 rm -rf "$ROOT_DIR/packages/cli/dist"
+rm -rf "$ROOT_DIR/backend/dist"
 mkdir -p "$BACKEND_RUNTIME" "$FRONTEND_RUNTIME"
 
 echo "🔨 Building backend (TypeScript)..."

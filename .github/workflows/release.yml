@@ -56,10 +56,7 @@ jobs:
           cd packages/cli
           CLI_EXPORTS=(
             "dist/runtime/backend/dist/index.js"
-            "dist/runtime/backend/dist/services/src/execution/index.js"
-            "dist/runtime/backend/dist/services/src/logs/index.js"
-            "dist/runtime/backend/dist/server/src/routes/index.js"
-            "dist/runtime/backend/dist/utils/src/logger.js"
+            "dist/runtime/frontend/dist/index.html"
           )
           MISSING=0
           for file in "${CLI_EXPORTS[@]}"; do
