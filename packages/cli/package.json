@@ -1,7 +1,7 @@
 {
   "name": "@nogataka/coding-agent-viewer",
   "private": false,
-  "version": "0.0.9",
+  "version": "0.0.10",
   "main": "index.js",
   "bin": {
     "coding-agent-viewer": "bin/cli.js"

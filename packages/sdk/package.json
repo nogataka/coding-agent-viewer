@@ -1,6 +1,6 @@
 {
   "name": "@nogataka/coding-agent-viewer-sdk",
-  "version": "0.0.9",
+  "version": "0.0.10",
   "description": "SDK for interacting with coding-agent-viewer services and execution helpers.",
   "main": "dist/cjs/index.js",
   "module": "dist/esm/index.js",
