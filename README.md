@@ -2,7 +2,7 @@
 
 **マルチAIコーディングエージェント管理SDK**
 
-Coding Agent Viewerは、Claude Code、Cursor、Gemini、Codexなどの複数のAIコーディングエージェントを統合管理するための**SDKとツールセット**です。
+Coding Agent Viewerは、Claude Code、Codex、OpenCode といったAIコーディングエージェントに加え、Cursor [開発途中]、Gemini [開発途中] を統合管理するための**SDKとツールセット**です。
 
 ## 🎯 主な特徴
 
@@ -202,15 +202,18 @@ pnpm dev
 
 ## 🎯 対応AIエージェント
 
-以下のコーディングエージェントをサポート：
+利用を推奨しているプロファイル：
 
+- 🔓 **OpenCode** - オープンソースAIターミナル
 - 🎨 **Claude Code** - Anthropic Claude搭載
-- 🖱️ **Cursor** - AI統合エディタ
-- 💎 **Gemini** - Google Gemini
 - 📦 **Codex** - OpenAI Codex
-- 🔓 **OpenCode** - オープンソースAI
 
-各エージェントのセッションログを統一フォーマットで管理できます。
+開発途中のプロファイル（挙動に制限あり）：
+
+- 🖱️ **Cursor [開発途中]** - 実行後のログ監視（normalized-logs SSE）が未整備のため、現状は推奨対象外
+- 💎 **Gemini [開発途中]** - 実行時にディレクトリ選択が必須で共通仕様から外れるため、用途限定
+
+制限付きプロファイルは、要件を理解した上で実験的にご利用ください。
 
 ---
 
