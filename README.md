@@ -34,15 +34,16 @@ npx @nogataka/coding-agent-viewer
 
 ---
 
-## 🚀 3つの利用レベル
+## 🚀 4つの利用レベル
 
-Coding Agent Viewerは、ニーズに応じて**3つのレベル**で利用できます：
+Coding Agent Viewerは、ニーズに応じて**4つのレベル**で利用できます：
 
 | レベル | 説明 | 用途 | 難易度 |
 |--------|------|------|--------|
 | **Level 1: Library** | SDKを直接インポート | CLIツール、バッチ処理、組み込み | ⭐⭐ |
 | **Level 2: API** | RESTful API + SSE | カスタムフロント、マイクロサービス | ⭐⭐⭐ |
 | **Level 3: Full-stack** | 完成されたWebアプリ | そのまま利用、カスタマイズ | ⭐ |
+| **Level 4: Custom Web Chat** | WebチャットUIサンプル | 既存SaaSへの組み込み・PoC | ⭐⭐⭐ |
 
 詳細は [`samples/`](./samples/) ディレクトリを参照してください。
 
@@ -138,6 +139,22 @@ npm run dev
 - 複数エージェントのサポート
 
 **サンプル**: [`samples/level3-fullstack/`](./samples/level3-fullstack/)
+
+---
+
+### Level 4: カスタムWebチャット
+
+Coding Agent Viewerの `POST /api/task-attempts` と正規化ログ SSE を呼び出すシングルページアプリの例：
+
+```bash
+cd samples/level4-custom
+pnpm install
+pnpm dev
+```
+
+ブラウザで <http://localhost:5174> を開き、使用するプロフィール・プロジェクト・プロンプトを指定します。送信するとバックエンドに `/api/task-attempts` を投げ、返却された `sessionId` で `/api/execution-processes/<id>/normalized-logs` に SSE 接続し、種別ごとに整形したログをリアルタイム表示します。UI から API ベースでエージェントを制御したい場合のベースラインとして利用できます。
+
+**サンプル**: [`samples/level4-custom/`](./samples/level4-custom/)
 
 ---
 
