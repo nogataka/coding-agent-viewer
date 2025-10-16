@@ -1,6 +1,18 @@
 #!/usr/bin/env node
 import { LogSourceFactory } from '@nogataka/coding-agent-viewer-sdk/services/logs';
 
+const toExecutorType = (labelOrExecutor) => {
+  if (!labelOrExecutor) {
+    return undefined;
+  }
+
+  if (labelOrExecutor.includes('_')) {
+    return labelOrExecutor.toUpperCase();
+  }
+
+  return labelOrExecutor.toLowerCase().replace(/\s+/g, '-').replace(/-+/g, '-').toUpperCase().replace(/-/g, '_');
+};
+
 /**
  * すべてのプロジェクトを一覧表示
  */
@@ -17,20 +29,8 @@ async function listProjects(options = {}) {
 
   try {
     // すべてのプロジェクトを取得
-    let projects = await factory.getAllProjects();
-
-    // プロファイルでフィルタ
-    if (profile) {
-      const executorTypeMap = {
-        'claude-code': 'CLAUDE_CODE',
-        'cursor': 'CURSOR',
-        'gemini': 'GEMINI',
-        'codex': 'CODEX',
-        'opencode': 'OPENCODE'
-      };
-      const executorType = executorTypeMap[profile] || profile.toUpperCase().replace(/-/g, '_');
-      projects = projects.filter(p => p.id.startsWith(`${executorType}:`));
-    }
+    const executorType = toExecutorType(profile);
+    const projects = await factory.getAllProjects(executorType);
 
     if (projects.length === 0) {
       console.log('No projects found.');

@@ -176,30 +176,33 @@ export class GeminiLogSource extends BaseExecutorLogSource {
   async getProjectList(): Promise<ProjectInfo[]> {
     try {
       await fs.access(this.GEMINI_TMP_DIR);
-      const entries = await fs.readdir(this.GEMINI_TMP_DIR, { withFileTypes: true });
-      const projects: ProjectInfo[] = [];
-
-      for (const entry of entries) {
-        if (!entry.isDirectory()) continue;
-        if (entry.name.startsWith('.')) continue;
-
-        const projectDir = path.join(this.GEMINI_TMP_DIR, entry.name);
-        const stats = await fs.stat(projectDir);
-
-        projects.push({
-          id: entry.name, // projectHash
-          name: `Gemini Project (${entry.name.substring(0, 8)}...)`,
-          git_repo_path: projectDir,
-          created_at: stats.birthtime,
-          updated_at: stats.mtime
-        });
-      }
-
-      return projects.sort((a, b) => b.updated_at.getTime() - a.updated_at.getTime());
-    } catch (error) {
-      console.error('[GeminiLogSource] Error reading projects:', error);
+    } catch {
       return [];
     }
+
+    const entries = await fs.readdir(this.GEMINI_TMP_DIR, { withFileTypes: true });
+    const projects: ProjectInfo[] = [];
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      if (entry.name.startsWith('.')) continue;
+
+      const projectDir = path.join(this.GEMINI_TMP_DIR, entry.name);
+      const stats = await fs.stat(projectDir).catch(() => null);
+      if (!stats) {
+        continue;
+      }
+
+      projects.push({
+        id: entry.name, // projectHash
+        name: `Gemini Workspace (${entry.name.substring(0, 8)}...)`,
+        git_repo_path: projectDir,
+        created_at: stats.birthtime,
+        updated_at: stats.mtime
+      });
+    }
+
+    return projects.sort((a, b) => b.updated_at.getTime() - a.updated_at.getTime());
   }
 
   /**
@@ -226,7 +229,10 @@ export class GeminiLogSource extends BaseExecutorLogSource {
         if (!entry.name.endsWith('.json')) continue;
 
         const filePath = path.join(chatsDir, entry.name);
-        const stats = await fs.stat(filePath);
+        const stats = await fs.stat(filePath).catch(() => null);
+        if (!stats) {
+          continue;
+        }
 
         // ファイル名からsessionIdを抽出: session-2025-09-20T13-28-0dc1d4d7.json
         const sessionId = entry.name.replace('session-', '').replace('.json', '');
@@ -243,15 +249,15 @@ export class GeminiLogSource extends BaseExecutorLogSource {
 
         sessions.push({
           id: sessionId,
-          projectId: projectId,
-          filePath: filePath,
+          projectId,
+          filePath,
           title,
           firstUserMessage: normalizedFirstUserMessage,
           status: 'completed',
           createdAt: stats.birthtime,
           updatedAt: stats.mtime,
           fileSize: stats.size,
-          workspacePath: null
+          workspacePath: projectDir
         });
       }
 

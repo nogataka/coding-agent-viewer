@@ -1,10 +1,112 @@
-import { BaseExecutorLogSource } from './baseExecutorLogSource.js';
+import { BaseExecutorLogSource, LineAccumulator } from './baseExecutorLogSource.js';
 import { ProjectInfo, SessionInfo } from '../logSourceStrategy.js';
 import { Readable } from 'stream';
 import type { NormalizedEntry, ActionType, FileChange } from '../executors/types.js';
 import * as path from 'path';
 import * as os from 'os';
 import * as fs from 'fs/promises';
+import type { Dirent } from 'fs';
+import { watch, FSWatcher } from 'chokidar';
+import { createHash } from 'node:crypto';
+import { activeExecutionRegistry } from '../../execution/activeExecutionRegistry.js';
+import { logger } from '../../../utils/logger.js';
+
+class OpencodeSessionAccumulator implements LineAccumulator {
+  private buffer: string[] = [];
+  private processed = 0;
+
+  push(line: string): string[] {
+    const results: string[] = [];
+    const hasBuffer = this.buffer.length > 0;
+    const trimmed = line.trim();
+
+    if (!hasBuffer && !trimmed) {
+      return results;
+    }
+
+    if (!hasBuffer && trimmed && !trimmed.startsWith('{') && !trimmed.startsWith('[')) {
+      this.processed += 1;
+      results.push(trimmed);
+      return results;
+    }
+
+    this.buffer.push(line);
+    const candidate = this.buffer.join('\n');
+
+    if (this.isCompleteJson(candidate)) {
+      this.processed += 1;
+      results.push(candidate);
+      this.buffer = [];
+    }
+
+    return results;
+  }
+
+  flush(): string[] {
+    if (this.buffer.length === 0) {
+      return [];
+    }
+
+    const candidate = this.buffer.join('\n');
+    this.buffer = [];
+
+    if (this.isCompleteJson(candidate)) {
+      this.processed += 1;
+      return [candidate];
+    }
+
+    const trimmed = candidate.trim();
+    if (trimmed) {
+      this.processed += 1;
+      return [trimmed];
+    }
+
+    return [];
+  }
+
+  private isCompleteJson(candidate: string): boolean {
+    const trimmed = candidate.trim();
+    if (!trimmed) {
+      return false;
+    }
+    if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) {
+      return false;
+    }
+    try {
+      JSON.parse(trimmed);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  get processedCount(): number {
+    return this.processed;
+  }
+}
+
+type SessionStreamState = {
+  entryIndex: number;
+  emittedKeys: Set<string>;
+  knownMessageIds: Set<string>;
+  finished: boolean;
+  workspacePath: string;
+  actualProjectId: string | null;
+};
+
+type MessageRecord = {
+  id: string;
+  metadata: any;
+  created: number;
+};
+
+type PartRecord = {
+  name: string;
+  data: any;
+  created: number;
+  keySuffix: string;
+  order: number;
+};
 
 /**
  * Opencode用ログソース
@@ -213,6 +315,10 @@ export class OpencodeLogSource extends BaseExecutorLogSource {
     return 'OPENCODE';
   }
 
+  protected createLineAccumulator(): LineAccumulator {
+    return new OpencodeSessionAccumulator();
+  }
+
   protected async resolveSessionFilePath(
     _executionId: string,
     sessionId: string,
@@ -226,146 +332,543 @@ export class OpencodeLogSource extends BaseExecutorLogSource {
   }
 
   protected parseSessionLine(line: string): any {
-    return JSON.parse(line);
+    const trimmed = line.trim();
+    if (!trimmed) {
+      return null;
+    }
+
+    if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) {
+      return {
+        type: 'event_msg',
+        payload: {
+          type: 'diagnostic',
+          message: trimmed
+        }
+      };
+    }
+
+    try {
+      return JSON.parse(trimmed);
+    } catch {
+      return {
+        type: 'event_msg',
+        payload: {
+          type: 'diagnostic',
+          message: trimmed
+        }
+      };
+    }
+  }
+
+  private emitNormalizedEntry(
+    stream: Readable,
+    state: SessionStreamState,
+    entry: NormalizedEntry,
+    dedupeKey: string
+  ): void {
+    if (!dedupeKey) {
+      return;
+    }
+    if (state.emittedKeys.has(dedupeKey)) {
+      return;
+    }
+    state.emittedKeys.add(dedupeKey);
+    const patch = this.createPatch(entry, state.entryIndex);
+    state.entryIndex += 1;
+    stream.push(`event: json_patch\ndata: ${JSON.stringify([patch])}\n\n`);
+  }
+
+  private extractInlineMessageText(metadata: any): string | null {
+    if (!metadata || typeof metadata !== 'object') {
+      return null;
+    }
+
+    if (typeof metadata.text === 'string') {
+      const trimmed = metadata.text.trim();
+      if (trimmed) {
+        return trimmed;
+      }
+    }
+
+    if (typeof metadata.content === 'string') {
+      const trimmed = metadata.content.trim();
+      if (trimmed) {
+        return trimmed;
+      }
+    }
+
+    if (Array.isArray(metadata.content)) {
+      const segments = metadata.content
+        .map((segment: any) =>
+          segment && typeof segment.text === 'string' ? segment.text.trim() : ''
+        )
+        .filter((segment: string) => segment.length > 0);
+      if (segments.length > 0) {
+        return segments.join(' ').trim();
+      }
+    }
+
+    return null;
+  }
+
+  private async readMessageRecords(sessionId: string): Promise<MessageRecord[]> {
+    const messagesDir = path.join(this.OPENCODE_STORAGE_DIR, 'message', sessionId);
+    let entries: Dirent[];
+    try {
+      entries = await fs.readdir(messagesDir, { withFileTypes: true });
+    } catch {
+      return [];
+    }
+
+    const records: MessageRecord[] = [];
+
+    for (const entry of entries) {
+      if (!entry.isFile() || !entry.name.endsWith('.json')) {
+        continue;
+      }
+
+      const filePath = path.join(messagesDir, entry.name);
+      try {
+        const raw = await fs.readFile(filePath, 'utf-8');
+        const metadata = JSON.parse(raw);
+        const id =
+          typeof metadata?.id === 'string' && metadata.id.length > 0
+            ? metadata.id
+            : entry.name.replace(/\.json$/, '');
+        const created = this.toMillis(metadata?.time?.created);
+        records.push({ id, metadata, created });
+      } catch (error) {
+        logger.warn(
+          `[OpencodeLogSource] Failed to read message file ${filePath}:`,
+          error
+        );
+      }
+    }
+
+    records.sort((a, b) => a.created - b.created);
+    return records;
+  }
+
+  private async readPartRecords(messageId: string, fallbackCreated: number): Promise<PartRecord[]> {
+    const partsDir = path.join(this.OPENCODE_STORAGE_DIR, 'part', messageId);
+    let files: string[];
+    try {
+      files = await fs.readdir(partsDir);
+    } catch {
+      return [];
+    }
+
+    const parts: PartRecord[] = [];
+
+    await Promise.all(
+      files.map(async (name, index) => {
+        const fullPath = path.join(partsDir, name);
+        try {
+          const raw = await fs.readFile(fullPath, 'utf-8');
+          const data = JSON.parse(raw);
+          const created = this.toMillis(data?.time?.created ?? fallbackCreated);
+          const fingerprint = createHash('sha1')
+            .update(`${name}:${JSON.stringify(data ?? {})}`)
+            .digest('hex');
+
+          parts.push({
+            name,
+            data,
+            created,
+            keySuffix: `${name}:${fingerprint}`,
+            order: index
+          });
+        } catch (error) {
+          logger.warn(
+            `[OpencodeLogSource] Failed to read part file ${fullPath}:`,
+            error
+          );
+        }
+      })
+    );
+
+    parts.sort((a, b) => (a.created === b.created ? a.order - b.order : a.created - b.created));
+    return parts;
+  }
+
+  private async emitEntriesForMessage(
+    message: MessageRecord,
+    stream: Readable,
+    state: SessionStreamState,
+    workspacePath: string
+  ): Promise<void> {
+    const msg = message.metadata;
+    const messageId = message.id;
+    if (!messageId) {
+      return;
+    }
+
+    const parts = await this.readPartRecords(messageId, message.created);
+    let textBuffer: string[] = [];
+
+    const entryType =
+      String(msg?.role ?? '').toLowerCase() === 'user'
+        ? { type: 'user_message' as const }
+        : { type: 'assistant_message' as const };
+
+    const flushText = () => {
+      if (textBuffer.length === 0) {
+        return;
+      }
+      const combined = textBuffer.join('\n\n').trim();
+      textBuffer = [];
+      if (!combined) {
+        return;
+      }
+
+      const entry: NormalizedEntry = {
+        timestamp: null,
+        entry_type: entryType,
+        content: combined,
+        metadata: msg
+      };
+      const dedupeKey = `message-text:${messageId}:${createHash('sha1')
+        .update(combined)
+        .digest('hex')}`;
+      this.emitNormalizedEntry(stream, state, entry, dedupeKey);
+    };
+
+    for (const part of parts) {
+      const type = part.data?.type;
+      if (type === 'text' || type === 'markdown') {
+        const text = typeof part.data?.text === 'string' ? part.data.text.trim() : '';
+        if (text) {
+          textBuffer.push(text);
+        }
+        continue;
+      }
+
+      if (type === 'tool') {
+        flushText();
+        const { entry, skip } = this.createToolEntryFromOpencodePart(part.data, workspacePath);
+        if (!skip) {
+          const dedupeKey = `message-tool:${messageId}:${part.keySuffix}`;
+          this.emitNormalizedEntry(stream, state, entry, dedupeKey);
+        }
+        continue;
+      }
+
+      if (type === 'step-start' || type === 'step-finish') {
+        flushText();
+        const label = type === 'step-start' ? 'Step started' : 'Step finished';
+        const entry: NormalizedEntry = {
+          timestamp: null,
+          entry_type: { type: 'system_message' },
+          content: label,
+          metadata: part.data
+        };
+        const dedupeKey = `message-step:${messageId}:${type}:${part.keySuffix}`;
+        this.emitNormalizedEntry(stream, state, entry, dedupeKey);
+        continue;
+      }
+    }
+
+    if (parts.length === 0) {
+      const inline = this.extractInlineMessageText(msg);
+      if (inline) {
+        textBuffer.push(inline);
+      }
+    }
+
+    flushText();
+  }
+
+  private updateActualProjectId(state: SessionStreamState, sessionData?: any): void {
+    if (state.workspacePath && state.workspacePath.trim().length > 0) {
+      state.actualProjectId = this.encodeProjectId(state.workspacePath.trim());
+      return;
+    }
+
+    const candidate = sessionData?.projectID;
+    if (
+      !state.actualProjectId &&
+      typeof candidate === 'string' &&
+      candidate.trim().length > 0
+    ) {
+      state.actualProjectId = candidate.trim();
+    }
+  }
+
+  private async emitSessionEntries(
+    sessionFilePath: string,
+    sessionUuid: string,
+    stream: Readable,
+    state: SessionStreamState,
+    reason: string
+  ): Promise<void> {
+    let sessionData: any = null;
+    try {
+      const raw = await fs.readFile(sessionFilePath, 'utf-8');
+      sessionData = JSON.parse(raw);
+      if (sessionData && typeof sessionData.directory === 'string') {
+        state.workspacePath = sessionData.directory;
+      }
+      this.updateActualProjectId(state, sessionData);
+    } catch (error) {
+      logger.warn(
+        `[OpencodeLogSource] Failed to read session file ${sessionFilePath} (${reason})`,
+        error
+      );
+    }
+
+    try {
+      const messages = await this.readMessageRecords(sessionUuid);
+      const seen = new Set<string>();
+      for (const message of messages) {
+        if (!message.id) {
+          continue;
+        }
+        seen.add(message.id);
+        await this.emitEntriesForMessage(message, stream, state, state.workspacePath);
+      }
+      state.knownMessageIds = seen;
+    } catch (error) {
+      logger.warn(
+        `[OpencodeLogSource] Failed to process messages for ${sessionUuid} (${reason})`,
+        error
+      );
+    }
+
+    if (!state.finished && sessionData && this.isSessionMetadataFinished(sessionData)) {
+      this.pushFinished(stream, state);
+    }
+  }
+
+  private isSessionMetadataFinished(metadata: any): boolean {
+    if (!metadata || typeof metadata !== 'object') {
+      return false;
+    }
+
+    const statusCandidates = [metadata.status, metadata.state, metadata?.summary?.status];
+    for (const candidate of statusCandidates) {
+      if (typeof candidate === 'string') {
+        const normalized = candidate.toLowerCase();
+        if (
+          normalized.includes('finish') ||
+          normalized.includes('complete') ||
+          normalized === 'done'
+        ) {
+          return true;
+        }
+      }
+    }
+
+    const timeInfo = metadata.time;
+    if (timeInfo && typeof timeInfo === 'object') {
+      if (
+        timeInfo.completed !== undefined ||
+        timeInfo.finished !== undefined ||
+        timeInfo.ended !== undefined
+      ) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  private pushFinished(stream: Readable, state: SessionStreamState): void {
+    if (state.finished) {
+      return;
+    }
+    state.finished = true;
+    stream.push(`event: finished\ndata: ${JSON.stringify({ message: 'Log stream ended' })}\n\n`);
+    stream.push(null);
   }
 
   protected async streamCompletedSession(filePath: string): Promise<Readable> {
     const stream = new Readable({ read() {} });
+    const state: SessionStreamState = {
+      entryIndex: 0,
+      emittedKeys: new Set<string>(),
+      knownMessageIds: new Set<string>(),
+      finished: false,
+      workspacePath: '',
+      actualProjectId: null
+    };
 
+    let sessionUuid = path.basename(filePath, '.json');
     try {
       const raw = await fs.readFile(filePath, 'utf-8');
-      const session = JSON.parse(raw) as {
-        id?: string;
-        directory?: string;
-        time?: { created?: number | string };
-      };
-
-      const sessionId = session.id;
-      if (!sessionId) {
-        throw new Error('Session ID not found in metadata');
+      const session = JSON.parse(raw);
+      if (typeof session?.id === 'string' && session.id.length > 0) {
+        sessionUuid = session.id;
       }
-
-      const workspacePath = session.directory ?? '';
-      const messagesDir = path.join(this.OPENCODE_STORAGE_DIR, 'message', sessionId);
-
-      let messageEntries: Array<{ path: string; created: number; metadata: any }>; // message metadata list
-      try {
-        const files = await fs.readdir(messagesDir);
-        messageEntries = await Promise.all(
-          files
-            .filter((file) => file.endsWith('.json'))
-            .map(async (file) => {
-              const fullPath = path.join(messagesDir, file);
-              const rawMsg = await fs.readFile(fullPath, 'utf-8');
-              const msg = JSON.parse(rawMsg);
-              const created = this.toMillis(msg?.time?.created);
-              return { path: fullPath, created, metadata: msg };
-            })
-        );
-      } catch (error) {
-        throw new Error(`Failed to read messages for session ${sessionId}: ${error}`);
+      if (typeof session?.directory === 'string' && session.directory.length > 0) {
+        state.workspacePath = session.directory;
       }
-
-      messageEntries.sort((a, b) => a.created - b.created);
-
-      let entryIndex = 0;
-
-      for (const message of messageEntries) {
-        const msg = message.metadata;
-        const partsDir = path.join(this.OPENCODE_STORAGE_DIR, 'part', msg.id);
-        let parts: Array<{ data: any; created: number; order: number }> = [];
-
-        try {
-          const partFiles = await fs.readdir(partsDir);
-          parts = await Promise.all(
-            partFiles.map(async (name, idx) => {
-              const full = path.join(partsDir, name);
-              const rawPart = await fs.readFile(full, 'utf-8');
-              const data = JSON.parse(rawPart);
-              return {
-                data,
-                created: this.toMillis(
-                  data?.time?.created ?? msg?.time?.created ?? message.created
-                ),
-                order: idx
-              };
-            })
-          );
-          parts.sort((a, b) =>
-            a.created === b.created ? a.order - b.order : a.created - b.created
-          );
-        } catch {
-          // no parts
-        }
-
-        let textBuffer: string[] = [];
-        const flushText = () => {
-          if (textBuffer.length === 0) return;
-          const combined = textBuffer.join('\n\n');
-          textBuffer = [];
-          const entry: NormalizedEntry = {
-            timestamp: null,
-            entry_type:
-              msg.role === 'user' ? { type: 'user_message' } : { type: 'assistant_message' },
-            content: combined,
-            metadata: msg
-          };
-          const patch = this.createPatch(entry, entryIndex);
-          entryIndex += 1;
-          stream.push(`event: json_patch\ndata: ${JSON.stringify([patch])}\n\n`);
-        };
-
-        for (const part of parts) {
-          const type = part.data?.type;
-          if (type === 'text' || type === 'markdown') {
-            const text = typeof part.data?.text === 'string' ? part.data.text : '';
-            if (text) {
-              textBuffer.push(text.trim());
-            }
-            continue;
-          }
-
-          if (type === 'tool') {
-            flushText();
-            const { entry, skip } = this.createToolEntryFromOpencodePart(part.data, workspacePath);
-            if (!skip) {
-              const patch = this.createPatch(entry, entryIndex);
-              entryIndex += 1;
-              stream.push(`event: json_patch\ndata: ${JSON.stringify([patch])}\n\n`);
-            }
-            continue;
-          }
-
-          // Other part types (step-start, step-finish, plan, etc.)
-          if (type === 'step-start' || type === 'step-finish') {
-            // treat as system messages for now
-            flushText();
-            const label = type === 'step-start' ? 'Step started' : 'Step finished';
-            const entry: NormalizedEntry = {
-              timestamp: null,
-              entry_type: { type: 'system_message' },
-              content: label,
-              metadata: part.data
-            };
-            const patch = this.createPatch(entry, entryIndex);
-            entryIndex += 1;
-            stream.push(`event: json_patch\ndata: ${JSON.stringify([patch])}\n\n`);
-            continue;
-          }
-        }
-
-        flushText();
-      }
-
-      stream.push(`event: finished\ndata: ${JSON.stringify({ message: 'Log stream ended' })}\n\n`);
-      stream.push(null);
+      this.updateActualProjectId(state, session);
     } catch (error) {
-      console.error('[OpencodeLogSource] Failed to stream session:', error);
+      logger.warn('[OpencodeLogSource] Failed to prime session metadata:', error);
+    }
+
+    try {
+      await this.emitSessionEntries(filePath, sessionUuid, stream, state, 'completed-snapshot');
+      if (!state.finished) {
+        this.pushFinished(stream, state);
+      }
+    } catch (error) {
+      logger.error('[OpencodeLogSource] Failed to stream completed session:', error);
       stream.push(
         `event: error\ndata: ${JSON.stringify({ error: 'Failed to read Opencode session' })}\n\n`
       );
       stream.push(null);
     }
+
+    return stream;
+  }
+
+  protected async streamLiveSession(filePath: string): Promise<Readable> {
+    const stream = new Readable({ read() {} });
+    const state: SessionStreamState = {
+      entryIndex: 0,
+      emittedKeys: new Set<string>(),
+      knownMessageIds: new Set<string>(),
+      finished: false,
+      workspacePath: '',
+      actualProjectId: null
+    };
+
+    let sessionUuid = path.basename(filePath, '.json');
+
+    try {
+      const raw = await fs.readFile(filePath, 'utf-8');
+      const session = JSON.parse(raw);
+      if (typeof session?.id === 'string' && session.id.length > 0) {
+        sessionUuid = session.id;
+      }
+      if (typeof session?.directory === 'string' && session.directory.length > 0) {
+        state.workspacePath = session.directory;
+      }
+      this.updateActualProjectId(state, session);
+    } catch (error) {
+      logger.warn('[OpencodeLogSource] Failed to read live session metadata:', error);
+    }
+
+    const isActive = (): boolean => {
+      if (!state.actualProjectId || state.actualProjectId.trim().length === 0) {
+        return true;
+      }
+      const composed = `OPENCODE:${state.actualProjectId}:${sessionUuid}`;
+      return activeExecutionRegistry.isActive(composed);
+    };
+
+    await this.emitSessionEntries(filePath, sessionUuid, stream, state, 'live-initial');
+
+    if (state.finished || !isActive()) {
+      if (!state.finished) {
+        this.pushFinished(stream, state);
+      }
+      return stream;
+    }
+
+    const watchers: FSWatcher[] = [];
+    let cleanedUp = false;
+    const cleanup = () => {
+      if (cleanedUp) {
+        return;
+      }
+      cleanedUp = true;
+      for (const watcher of watchers) {
+        try {
+          watcher.close();
+        } catch (error) {
+          logger.warn('[OpencodeLogSource] Failed to close watcher:', error);
+        }
+      }
+      watchers.length = 0;
+    };
+
+    let refreshChain = Promise.resolve();
+    const enqueueRefresh = (reason: string) => {
+      refreshChain = refreshChain
+        .then(async () => {
+          if (state.finished || cleanedUp) {
+            return;
+          }
+          await this.emitSessionEntries(filePath, sessionUuid, stream, state, reason);
+          if (!state.finished && !isActive()) {
+            this.pushFinished(stream, state);
+          }
+          if (state.finished) {
+            cleanup();
+          }
+        })
+        .catch((error) => {
+          logger.warn(
+            `[OpencodeLogSource] Failed to refresh live session ${sessionUuid} (${reason}):`,
+            error
+          );
+        });
+      return refreshChain;
+    };
+
+    const messageDir = path.join(this.OPENCODE_STORAGE_DIR, 'message', sessionUuid);
+    const partRoot = path.join(this.OPENCODE_STORAGE_DIR, 'part');
+
+    await Promise.all([
+      fs.mkdir(messageDir, { recursive: true }).catch(() => {}),
+      fs.mkdir(partRoot, { recursive: true }).catch(() => {})
+    ]);
+
+    const watcherOptions = {
+      persistent: true,
+      ignoreInitial: true,
+      awaitWriteFinish: {
+        stabilityThreshold: 150,
+        pollInterval: 75
+      }
+    } as const;
+
+    const sessionWatcher = watch(filePath, watcherOptions);
+    sessionWatcher.on('change', () => {
+      if (!cleanedUp && !state.finished) {
+        enqueueRefresh('session-change');
+      }
+    });
+    sessionWatcher.on('error', (error) =>
+      logger.warn('[OpencodeLogSource] Session watcher error:', error)
+    );
+    watchers.push(sessionWatcher);
+
+    const messageWatcher = watch(messageDir, { ...watcherOptions, depth: 0 });
+    messageWatcher.on('all', (eventName) => {
+      if (!cleanedUp && !state.finished) {
+        enqueueRefresh(`message-${eventName}`);
+      }
+    });
+    messageWatcher.on('error', (error) =>
+      logger.warn('[OpencodeLogSource] Message watcher error:', error)
+    );
+    watchers.push(messageWatcher);
+
+    const partWatcher = watch(partRoot, { ...watcherOptions, depth: 1 });
+    partWatcher.on('all', (_eventName, targetPath) => {
+      if (cleanedUp || state.finished) {
+        return;
+      }
+      const relative = path.relative(partRoot, targetPath);
+      const [messageId] = relative.split(path.sep);
+      if (state.knownMessageIds.has(messageId)) {
+        enqueueRefresh('part-update');
+      }
+    });
+    partWatcher.on('error', (error) =>
+      logger.warn('[OpencodeLogSource] Part watcher error:', error)
+    );
+    watchers.push(partWatcher);
+
+    const finalize = () => {
+      cleanup();
+    };
+
+    stream.on('close', finalize);
+    stream.on('end', finalize);
 
     return stream;
   }

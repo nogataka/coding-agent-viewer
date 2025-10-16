@@ -97,7 +97,7 @@ backend/
 │ ┌──────────────────┐  │   │ ┌───────────────────┐  │
 │ │ExecutionService  │  │   │ │LogSourceFactory   │  │
 │ │                  │  │   │ │                   │  │
-│ │- startNewChat()  │  │   │ │- getAllProjects() │  │
+│ │- startNewChat()  │  │   │ │- getAllProjects(filter?) │ │
 │ │- sendFollowUp()  │  │   │ │- getSessions()    │  │
 │ │- stopExecution() │  │   │ │- getSessionStream│  │
 │ └──────────────────┘  │   │ └───────────────────┘  │
@@ -256,11 +256,10 @@ API Module (projects.ts)
   ▼
 Log Module (logSourceFactory.ts)
   │
-  │ getAllProjects()
-  ├─ for each executor source:
-  │   ├─ getProjectList()
-  │   └─ add executor type prefix
-  └─ merge and sort
+  │ getAllProjects(executorType?)
+  ├─ resolve executor filter (if provided)
+  ├─ targeted sourcesのみで getProjectList()
+  └─ prefix + merge + sort
   │
   ▼
 Log Source (e.g., ClaudeLogSource)
@@ -274,7 +273,6 @@ Log Source (e.g., ClaudeLogSource)
   ▼
 API Module
   │
-  │ filter by executor type
   │ map to response format
   ▼
 Frontend
@@ -639,7 +637,8 @@ export type * from './executors/types';
 import { LogSourceFactory } from '@coding-agent-viewer/log-module';
 
 const factory = new LogSourceFactory();
-const projects = await factory.getAllProjects();
+const projects = await factory.getAllProjects('CLAUDE_CODE');
+// 省略すると全 Executor のプロジェクトをまとめて取得
 ```
 
 ### 共通推奨事項

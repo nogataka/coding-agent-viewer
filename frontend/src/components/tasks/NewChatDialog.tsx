@@ -66,7 +66,10 @@ export function NewChatDialog({
         setProfiles(data);
         const profile = data.find((item) => item.label === profileLabel);
         if (profile?.variants && profile.variants.length > 0) {
-          setVariant((prev) => prev ?? profile.variants![0].label);
+          setVariant((prev) => {
+            if (prev) return prev;
+            return 'default';
+          });
         } else {
           setVariant(null);
         }
@@ -129,8 +132,19 @@ export function NewChatDialog({
     [prompt, projectId, variant, toast, onOpenChange, onSuccess]
   );
 
-  const hasVariants =
-    selectedProfile?.variants && selectedProfile.variants.length > 0;
+  const variants = selectedProfile?.variants ?? [];
+  const hasVariants = variants.length > 0;
+  const hasExplicitDefault = variants.some(
+    (item) => item.label.toLowerCase() === 'default'
+  );
+  const displayVariants = useMemo(() => {
+    if (!hasVariants) return [];
+    const entries = [...variants];
+    if (!hasExplicitDefault) {
+      entries.unshift({ label: 'default' });
+    }
+    return entries;
+  }, [variants, hasVariants, hasExplicitDefault]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -170,14 +184,20 @@ export function NewChatDialog({
               </label>
               <Select
                 value={variant ?? undefined}
-                onValueChange={(value) => setVariant(value)}
+                onValueChange={(value) =>
+                  setVariant(
+                    value.toLowerCase() === 'default' && !hasExplicitDefault
+                      ? null
+                      : value
+                  )
+                }
                 disabled={loading}
               >
                 <SelectTrigger id="variant">
                   <SelectValue placeholder="Select variant" />
                 </SelectTrigger>
                 <SelectContent>
-                  {selectedProfile?.variants?.map((item) => (
+                  {displayVariants.map((item) => (
                     <SelectItem key={item.label} value={item.label}>
                       {item.label}
                     </SelectItem>

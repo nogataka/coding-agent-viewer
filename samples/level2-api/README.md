@@ -27,14 +27,14 @@ level2-api/
 
 ## インストール
 
-npmパッケージ`@nogataka/coding-agent-viewer-sdk`を使用するため、バックエンドのビルドは不要です：
+リポジトリ直下では pnpm のワークスペース経由で依存を解決するのが確実です。
 
 ```bash
-cd samples/level2-api
-npm install
+# リポジトリのルートで実行
+pnpm install --filter samples/level2-api
 ```
 
-> **Note**: このサンプルは公開されたnpmパッケージ `@nogataka/coding-agent-viewer-sdk@latest` を使用します。
+> **Tip**: ディレクトリごと他プロジェクトへコピーした場合は、コピー先で `npm install` を実行すれば公開済み `@nogataka/coding-agent-viewer-sdk@latest` を利用できます。
 
 ## 起動方法
 

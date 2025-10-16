@@ -1,6 +1,11 @@
 import { Readable } from 'stream';
 import { ILogSourceStrategy, ProjectInfo, SessionInfo } from '../logSourceStrategy.js';
 import type { NormalizedEntry, JsonPatchOperation } from '../executors/types.js';
+export interface LineAccumulator {
+    push(line: string): string[];
+    flush(): string[];
+    readonly processedCount: number;
+}
 /**
  * Executor固有のログソースの基底クラス
  */
@@ -14,6 +19,10 @@ export declare abstract class BaseExecutorLogSource implements ILogSourceStrateg
      * JSONLファイルの1行をパースして正規化エントリに変換（各Executorで実装）
      */
     protected abstract parseSessionLine(line: string): any;
+    /**
+     * ログの行をまとめる戦略をオーバーライド可能にするフック。
+     */
+    protected createLineAccumulator(): LineAccumulator;
     /**
      * プロジェクト一覧を取得（各Executorで実装）
      */

@@ -1,4 +1,4 @@
-import { BaseExecutorLogSource } from './baseExecutorLogSource.js';
+import { BaseExecutorLogSource, LineAccumulator } from './baseExecutorLogSource.js';
 import { ProjectInfo, SessionInfo } from '../logSourceStrategy.js';
 import { Readable } from 'stream';
 /**
@@ -15,6 +15,7 @@ export declare class OpencodeLogSource extends BaseExecutorLogSource {
     private collectSessionMetadata;
     private extractFirstUserMessage;
     getName(): string;
+    protected createLineAccumulator(): LineAccumulator;
     protected resolveSessionFilePath(_executionId: string, sessionId: string, _workingDir: string): Promise<string | null>;
     protected parseSessionLine(line: string): any;
     protected streamCompletedSession(filePath: string): Promise<Readable>;

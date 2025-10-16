@@ -12,6 +12,33 @@ import type {
 } from '../executors/types.js';
 import { CommandExitStatusType, ToolResultValueType } from '../executors/types.js';
 
+export interface LineAccumulator {
+  push(line: string): string[];
+  flush(): string[];
+  readonly processedCount: number;
+}
+
+class JsonLineAccumulator implements LineAccumulator {
+  private processed = 0;
+
+  push(line: string): string[] {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      return [];
+    }
+    this.processed += 1;
+    return [trimmed];
+  }
+
+  flush(): string[] {
+    return [];
+  }
+
+  get processedCount(): number {
+    return this.processed;
+  }
+}
+
 /**
  * Executor固有のログソースの基底クラス
  */
@@ -31,6 +58,13 @@ export abstract class BaseExecutorLogSource implements ILogSourceStrategy {
    * JSONLファイルの1行をパースして正規化エントリに変換（各Executorで実装）
    */
   protected abstract parseSessionLine(line: string): any;
+
+  /**
+   * ログの行をどの単位でまとめるかを決めるフック。既定では1行=1エントリ。
+   */
+  protected createLineAccumulator(): LineAccumulator {
+    return new JsonLineAccumulator();
+  }
 
   /**
    * プロジェクト一覧を取得（各Executorで実装）
@@ -87,15 +121,28 @@ export abstract class BaseExecutorLogSource implements ILogSourceStrategy {
 
     try {
       const content = await fs.readFile(filePath, 'utf-8');
-      const lines = content.split('\n').filter((line) => line.trim());
-
-      logger.info(`[${this.getName()}] Read ${lines.length} lines from ${filePath}`);
-
+      const lines = content.split('\n');
+      const accumulator = this.createLineAccumulator();
       const entryIndexRef = { value: 0 };
 
-      for (const line of lines) {
-        this.processLineAndEmit(line, stream, entryIndexRef);
+      const emitLines = (rawLines: string[]) => {
+        for (const rawLine of rawLines) {
+          const completeEntries = accumulator.push(rawLine);
+          for (const entry of completeEntries) {
+            this.processLineAndEmit(entry, stream, entryIndexRef);
+          }
+        }
+      };
+
+      emitLines(lines);
+
+      for (const remaining of accumulator.flush()) {
+        this.processLineAndEmit(remaining, stream, entryIndexRef);
       }
+
+      logger.info(
+        `[${this.getName()}] Read ${accumulator.processedCount} entries from ${filePath}`
+      );
 
       stream.push(`event: finished\ndata: ${JSON.stringify({ message: 'Log stream ended' })}\n\n`);
       stream.push(null);
@@ -117,6 +164,26 @@ export abstract class BaseExecutorLogSource implements ILogSourceStrategy {
     logger.info(`[${this.getName()}] Starting live stream for ${filePath}`);
 
     const entryIndexRef = { value: 0 };
+    const accumulator = this.createLineAccumulator();
+
+    const emitLines = (rawLines: string[], debugLabel?: string) => {
+      if (rawLines.length === 0) {
+        return;
+      }
+      const before = accumulator.processedCount;
+      for (const rawLine of rawLines) {
+        const completeEntries = accumulator.push(rawLine);
+        for (const entry of completeEntries) {
+          this.processLineAndEmit(entry, stream, entryIndexRef);
+        }
+      }
+      const emitted = accumulator.processedCount - before;
+      if (debugLabel) {
+        logger.debug(
+          `[${this.getName()}] ${debugLabel}: raw=${rawLines.length}, emitted=${emitted}`
+        );
+      }
+    };
 
     // 既存の内容を読み込み
     let lastPosition = 0;
@@ -124,15 +191,13 @@ export abstract class BaseExecutorLogSource implements ILogSourceStrategy {
       const stats = await fs.stat(filePath);
       if (stats.size > 0) {
         const content = await fs.readFile(filePath, 'utf-8');
-        const lines = content.split('\n').filter((line) => line.trim());
+        const lines = content.split('\n');
 
-        for (const line of lines) {
-          this.processLineAndEmit(line, stream, entryIndexRef);
-        }
+        emitLines(lines, 'initial snapshot');
 
         lastPosition = content.length;
         logger.info(
-          `[${this.getName()}] Initial read: ${lines.length} lines, ${lastPosition} bytes`
+          `[${this.getName()}] Initial read: ${accumulator.processedCount} entries, ${lastPosition} bytes`
         );
       }
     } catch (err) {
@@ -161,13 +226,9 @@ export abstract class BaseExecutorLogSource implements ILogSourceStrategy {
 
         if (content.length > lastPosition) {
           const newContent = content.slice(lastPosition);
-          const newLines = newContent.split('\n').filter((line) => line.trim());
+          const newLines = newContent.split('\n');
 
-          logger.debug(`[${this.getName()}] File changed: ${newLines.length} new lines`);
-
-          for (const line of newLines) {
-            this.processLineAndEmit(line, stream, entryIndexRef);
-          }
+          emitLines(newLines, 'file change');
 
           lastPosition = content.length;
         }

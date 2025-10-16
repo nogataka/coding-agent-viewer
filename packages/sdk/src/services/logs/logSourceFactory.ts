@@ -12,6 +12,10 @@ import { activeExecutionRegistry } from '../execution/activeExecutionRegistry.js
 
 export class LogSourceFactory {
   private executorSources: Map<string, ILogSourceStrategy>;
+  private readonly sessionRetryOptions = {
+    maxAttempts: 20,
+    delayMs: 250
+  };
 
   constructor() {
     // 各Executor用のログソースを登録
@@ -28,10 +32,18 @@ export class LogSourceFactory {
   /**
    * 全Executorのプロジェクト一覧を取得（FILESYSTEM戦略）
    */
-  async getAllProjects(): Promise<ProjectInfo[]> {
+  async getAllProjects(executorFilter?: string): Promise<ProjectInfo[]> {
     const allProjects: ProjectInfo[] = [];
 
+    const normalizedFilter = executorFilter?.trim();
+
     for (const [executorType, source] of this.executorSources.entries()) {
+      if (
+        normalizedFilter &&
+        executorType.toLowerCase() !== normalizedFilter.toLowerCase()
+      ) {
+        continue;
+      }
       try {
         const projects = await source.getProjectList();
         // Executor typeをプロジェクト情報に追加
@@ -133,7 +145,7 @@ export class LogSourceFactory {
 
     const { executorType } = parsed;
 
-    const sessionData = await this.findSessionById(sessionId);
+    const sessionData = await this.waitForSession(sessionId);
     if (!sessionData) {
       return null;
     }
@@ -201,6 +213,27 @@ export class LogSourceFactory {
       logger.error(`[LogSourceFactory] Error finding session ${sessionId}:`, error);
       return null;
     }
+  }
+
+  private async waitForSession(sessionId: string) {
+    const { maxAttempts, delayMs } = this.sessionRetryOptions;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const sessionData = await this.findSessionById(sessionId);
+      if (sessionData) {
+        return sessionData;
+      }
+
+      if (attempt < maxAttempts - 1) {
+        await this.delay(delayMs);
+      }
+    }
+
+    return null;
+  }
+
+  private async delay(ms: number) {
+    await new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   private composeProjectId(executorType: string, actualProjectId: string): string {

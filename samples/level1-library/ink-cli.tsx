@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Box, Text, useInput, useApp, render } from 'ink';
 import { LogSourceFactory } from '@nogataka/coding-agent-viewer-sdk/services/logs';
-import { ExecutionService } from '@nogataka/coding-agent-viewer-sdk/services/execution';
+import { getProfiles } from '@nogataka/coding-agent-viewer-sdk/services/execution';
 
 // Types
 interface Project {
@@ -22,6 +22,20 @@ interface Session {
 
 type ViewMode = 'profile-list' | 'project-list' | 'session-list' | 'session-detail' | 'log-stream';
 
+interface FormattedLogEntry {
+  id: number;
+  icon: string;
+  title: string;
+  color: string;
+  content: string;
+}
+
+interface ProfileMeta {
+  label: string;
+  executorType: string;
+  displayName: string;
+}
+
 // Main App Component
 const App: React.FC = () => {
   const { exit } = useApp();
@@ -32,9 +46,9 @@ const App: React.FC = () => {
   // Data
   const [allProjects, setAllProjects] = useState<Project[]>([]);
   const [projectsByProfile, setProjectsByProfile] = useState<Record<string, Project[]>>({});
-  const [profiles, setProfiles] = useState<string[]>([]);
+  const [profiles, setProfiles] = useState<ProfileMeta[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
-  const [logEntries, setLogEntries] = useState<string[]>([]);
+  const [logEntries, setLogEntries] = useState<FormattedLogEntry[]>([]);
   
   // Selection
   const [selectedProfileIndex, setSelectedProfileIndex] = useState(0);
@@ -43,33 +57,102 @@ const App: React.FC = () => {
   const [currentProfile, setCurrentProfile] = useState<string | null>(null);
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
   const [currentSession, setCurrentSession] = useState<Session | null>(null);
+  const factoryRef = useRef<LogSourceFactory | null>(null);
+  if (!factoryRef.current) {
+    factoryRef.current = new LogSourceFactory();
+  }
+  const factory = factoryRef.current!;
+  const logEntryCounter = useRef(0);
 
-  const factory = new LogSourceFactory();
-  const executor = new ExecutionService();
+  const getProfileMeta = (executorType?: string | null) =>
+    executorType ? profiles.find((profile) => profile.executorType === executorType) : undefined;
+
+  const formatLogEntry = (entry: any): FormattedLogEntry | null => {
+    if (!entry || !entry.entry_type) {
+      return null;
+    }
+
+    const type = entry.entry_type.type;
+    const baseContent = normalizeContent(entry.content);
+
+    const createEntry = (icon: string, title: string, color: string, content: string) => ({
+      id: logEntryCounter.current++,
+      icon,
+      title,
+      color,
+      content
+    });
+
+    switch (type) {
+      case 'user_message':
+        return createEntry('👤', 'User message', 'cyan', baseContent);
+      case 'assistant_message':
+        return createEntry('🤖', 'Assistant response', 'green', baseContent);
+      case 'tool_use':
+        return createEntry('🔧', `Tool: ${entry.entry_type.tool_name || 'unknown'}`, 'yellow', baseContent);
+      case 'tool_result':
+        return createEntry('🛠️', `Tool result: ${entry.entry_type.tool_name || 'tool'}`, 'yellow', baseContent);
+      case 'system_message':
+        return createEntry('ℹ️', 'System', 'blue', baseContent);
+      case 'thinking':
+        return createEntry('💭', 'Assistant thinking', 'magenta', baseContent);
+      default:
+        return createEntry('📝', type, 'white', baseContent);
+    }
+  };
+
+  const normalizeContent = (value: any): string => {
+    if (value == null) {
+      return '';
+    }
+    if (typeof value === 'string') {
+      return value;
+    }
+    if (Array.isArray(value)) {
+      return value.map((item) => normalizeContent(item)).join('\n');
+    }
+    if (typeof value === 'object') {
+      if (typeof value.text === 'string') {
+        return value.text;
+      }
+      return JSON.stringify(value, null, 2);
+    }
+    return String(value);
+  };
 
   // Load projects on mount
   useEffect(() => {
-    loadProjects();
+    const catalog = getProfiles().map((definition) => ({
+      label: definition.label,
+      executorType: definition.label.toUpperCase().replace(/-/g, '_'),
+      displayName: definition.label
+        .split('-')
+        .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+        .join(' ')
+    }));
+    setProfiles(catalog);
+    loadProjects(catalog);
   }, []);
 
-  const loadProjects = async () => {
+  const loadProjects = async (catalogOverride?: ProfileMeta[]) => {
     setLoading(true);
+    const catalog = catalogOverride ?? profiles;
     try {
-      const projects = await factory.getAllProjects();
-      setAllProjects(projects);
-      
-      // Group by profile
+      const aggregated: Project[] = [];
       const grouped: Record<string, Project[]> = {};
-      for (const project of projects) {
-        const [profile] = project.id.split(':');
-        if (!grouped[profile]) {
-          grouped[profile] = [];
+
+      for (const profile of catalog) {
+        try {
+          const projects = await factory.getAllProjects(profile.executorType);
+          aggregated.push(...projects);
+          grouped[profile.executorType] = projects;
+        } catch (innerError) {
+          console.warn(`⚠️  Failed to load projects for ${profile.displayName}:`, innerError);
         }
-        grouped[profile].push(project);
       }
-      
+
+      setAllProjects(aggregated);
       setProjectsByProfile(grouped);
-      setProfiles(Object.keys(grouped));
       setLoading(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load projects');
@@ -90,6 +173,9 @@ const App: React.FC = () => {
   };
 
   const streamLogs = async (sessionId: string) => {
+    logEntryCounter.current = 0;
+    setLogEntries([]);
+
     try {
       const stream = await factory.getSessionStream(sessionId);
       if (!stream) {
@@ -97,19 +183,94 @@ const App: React.FC = () => {
         return;
       }
 
+      let buffer = '';
+
+      const processEventBlock = (block: string) => {
+        const lines = block.split('\n');
+        let eventType: string | null = null;
+        const dataLines: string[] = [];
+
+        for (const line of lines) {
+          if (line.startsWith('event:')) {
+            eventType = line.substring(6).trim();
+          } else if (line.startsWith('data:')) {
+            dataLines.push(line.substring(5));
+          }
+        }
+
+        const data = dataLines.join('').trim();
+        if (eventType === 'json_patch' && data) {
+          try {
+            const patches = JSON.parse(data);
+            const formattedEntries: FormattedLogEntry[] = [];
+            for (const patch of patches) {
+              if (patch?.op === 'add' && patch?.value?.type === 'NORMALIZED_ENTRY') {
+                const formatted = formatLogEntry(patch.value.content);
+                if (formatted) {
+                  formattedEntries.push(formatted);
+                }
+              }
+            }
+            if (formattedEntries.length > 0) {
+              setLogEntries((prev) => [...prev, ...formattedEntries]);
+            }
+          } catch {
+            // Ignore malformed patch data
+          }
+        } else if (eventType === 'finished') {
+          setLogEntries((prev) => [
+            ...prev,
+            {
+              id: logEntryCounter.current++,
+              icon: '✅',
+              title: 'Stream finished',
+              color: 'green',
+              content: 'Log stream ended.'
+            }
+          ]);
+          stream.destroy();
+        }
+      };
+
       stream.on('data', (chunk) => {
-        const text = chunk.toString();
-        const lines = text.split('\n').filter(line => line.trim());
-        
-        setLogEntries(prev => [...prev, ...lines]);
+        buffer += chunk.toString();
+        const parts = buffer.split('\n\n');
+        buffer = parts.pop() ?? '';
+        for (const part of parts) {
+          if (part.trim().length > 0) {
+            processEventBlock(part);
+          }
+        }
       });
 
       stream.on('end', () => {
-        setLogEntries(prev => [...prev, '--- Stream finished ---']);
+        if (buffer.trim().length > 0) {
+          processEventBlock(buffer);
+          buffer = '';
+        }
+        setLogEntries((prev) => [
+          ...prev,
+          {
+            id: logEntryCounter.current++,
+            icon: 'ℹ️',
+            title: 'Connection closed',
+            color: 'gray',
+            content: 'Stream closed by server.'
+          }
+        ]);
       });
 
       stream.on('error', (err) => {
-        setError(`Stream error: ${err.message}`);
+        setLogEntries((prev) => [
+          ...prev,
+          {
+            id: logEntryCounter.current++,
+            icon: '❌',
+            title: 'Stream error',
+            color: 'red',
+            content: err.message
+          }
+        ]);
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to stream logs');
@@ -147,7 +308,7 @@ const App: React.FC = () => {
   });
 
   const handleUp = () => {
-    if (viewMode === 'profile-list') {
+    if (viewMode === 'profile-list' && profiles.length > 0) {
       setSelectedProfileIndex(prev => Math.max(0, prev - 1));
     } else if (viewMode === 'project-list') {
       setSelectedProjectIndex(prev => Math.max(0, prev - 1));
@@ -157,7 +318,7 @@ const App: React.FC = () => {
   };
 
   const handleDown = () => {
-    if (viewMode === 'profile-list') {
+    if (viewMode === 'profile-list' && profiles.length > 0) {
       setSelectedProfileIndex(prev => Math.min(profiles.length - 1, prev + 1));
     } else if (viewMode === 'project-list' && currentProfile) {
       const projects = projectsByProfile[currentProfile] || [];
@@ -170,8 +331,14 @@ const App: React.FC = () => {
   const handleEnter = () => {
     if (viewMode === 'profile-list') {
       const profile = profiles[selectedProfileIndex];
-      setCurrentProfile(profile);
+      if (!profile) {
+        return;
+      }
+      setCurrentProfile(profile.executorType);
       setSelectedProjectIndex(0);
+      if (!projectsByProfile[profile.executorType]) {
+        loadProjects();
+      }
       setViewMode('project-list');
     } else if (viewMode === 'project-list' && currentProfile) {
       const projects = projectsByProfile[currentProfile] || [];
@@ -227,7 +394,11 @@ const App: React.FC = () => {
 
   return (
     <Box flexDirection="column" width="100%" padding={1}>
-      <Header viewMode={viewMode} currentProfile={currentProfile} currentProject={currentProject} />
+      <Header
+        viewMode={viewMode}
+        currentProfile={getProfileMeta(currentProfile)}
+        currentProject={currentProject}
+      />
       
       {viewMode === 'profile-list' && (
         <ProfileList profiles={profiles} selectedIndex={selectedProfileIndex} projectsByProfile={projectsByProfile} />
@@ -258,9 +429,9 @@ const App: React.FC = () => {
 };
 
 // Header Component
-const Header: React.FC<{ 
-  viewMode: ViewMode; 
-  currentProfile: string | null;
+const Header: React.FC<{
+  viewMode: ViewMode;
+  currentProfile: ProfileMeta | undefined;
   currentProject: Project | null;
 }> = ({ viewMode, currentProfile, currentProject }) => {
   return (
@@ -269,7 +440,7 @@ const Header: React.FC<{
       <Box>
         <Text dimColor>
           {viewMode === 'profile-list' && 'Select Agent Profile'}
-          {viewMode === 'project-list' && `${getProfileIcon(currentProfile || '')} ${currentProfile} - Select Project`}
+          {viewMode === 'project-list' && `${getProfileIcon(currentProfile?.executorType || '')} ${currentProfile?.displayName ?? 'Profile'} - Select Project`}
           {viewMode === 'session-list' && `📂 ${currentProject?.name} - Select Session`}
           {viewMode === 'session-detail' && 'Session Details'}
           {viewMode === 'log-stream' && 'Log Stream'}
@@ -280,8 +451,8 @@ const Header: React.FC<{
 };
 
 // Profile List Component
-const ProfileList: React.FC<{ 
-  profiles: string[]; 
+const ProfileList: React.FC<{
+  profiles: ProfileMeta[];
   selectedIndex: number;
   projectsByProfile: Record<string, Project[]>;
 }> = ({ profiles, selectedIndex, projectsByProfile }) => {
@@ -290,15 +461,15 @@ const ProfileList: React.FC<{
       <Text bold>Agent Profiles:</Text>
       {profiles.map((profile, index) => {
         const isSelected = index === selectedIndex;
-        const projectCount = projectsByProfile[profile]?.length || 0;
+        const projectCount = projectsByProfile[profile.executorType]?.length || 0;
         return (
-          <Box key={profile}>
+          <Box key={profile.executorType}>
             <Text 
               color={isSelected ? 'black' : 'white'}
               backgroundColor={isSelected ? 'cyan' : undefined}
               bold={isSelected}
             >
-              {isSelected ? '▶ ' : '  '}{getProfileIcon(profile)} {profile} ({projectCount} projects)
+              {isSelected ? '▶ ' : '  '}{getProfileIcon(profile.executorType)} {profile.displayName} ({projectCount} projects)
             </Text>
           </Box>
         );
@@ -389,16 +560,24 @@ const SessionDetail: React.FC<{ session: Session }> = ({ session }) => {
 };
 
 // Log Stream Component
-const LogStream: React.FC<{ entries: string[] }> = ({ entries }) => {
+const LogStream: React.FC<{ entries: FormattedLogEntry[] }> = ({ entries }) => {
   const displayEntries = entries.slice(-20); // Show last 20 entries
 
   return (
     <Box flexDirection="column" borderStyle="single" borderColor="magenta" padding={1}>
       <Text bold color="magenta">Log Stream (last 20 entries):</Text>
-      {displayEntries.map((entry, index) => (
-        <Text key={index} dimColor>{entry}</Text>
-      ))}
-      {entries.length === 0 && <Text color="yellow">Waiting for logs...</Text>}
+      {displayEntries.length === 0 ? (
+        <Text color="yellow">Waiting for logs...</Text>
+      ) : (
+        displayEntries.map((entry) => (
+          <Box key={entry.id} flexDirection="column" marginBottom={1}>
+            <Text color={entry.color} bold>{`${entry.icon} ${entry.title}`}</Text>
+            {entry.content && entry.content.split('\n').map((line, idx) => (
+              <Text key={`${entry.id}-line-${idx}`} dimColor>{`  ${line}`}</Text>
+            ))}
+          </Box>
+        ))
+      )}
     </Box>
   );
 };

@@ -1,11 +1,15 @@
 import { ProjectInfo, SessionInfo } from './logSourceStrategy.js';
 export declare class LogSourceFactory {
     private executorSources;
+    private readonly sessionRetryOptions: {
+        maxAttempts: number;
+        delayMs: number;
+    };
     constructor();
     /**
      * 全Executorのプロジェクト一覧を取得（FILESYSTEM戦略）
      */
-    getAllProjects(): Promise<ProjectInfo[]>;
+    getAllProjects(executorFilter?: string): Promise<ProjectInfo[]>;
     /**
      * 指定プロジェクトのセッション一覧を取得（FILESYSTEM戦略）
      */
@@ -26,6 +30,8 @@ export declare class LogSourceFactory {
         actualProjectId: string;
         actualSessionId: string;
     } | null>;
+    private waitForSession;
+    private delay;
     private composeProjectId;
     private composeSessionId;
     private parseProjectId;

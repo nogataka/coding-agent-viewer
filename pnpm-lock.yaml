@@ -482,7 +482,7 @@ importers:
   samples/level1-library:
     dependencies:
       '@nogataka/coding-agent-viewer-sdk':
-        specifier: workspace:*
+        specifier: file:../../packages/sdk
         version: link:../../packages/sdk
       chalk:
         specifier: ^5.3.0
@@ -513,7 +513,7 @@ importers:
   samples/level2-api:
     dependencies:
       '@nogataka/coding-agent-viewer-sdk':
-        specifier: workspace:*
+        specifier: file:../../packages/sdk
         version: link:../../packages/sdk
       cors:
         specifier: ^2.8.5
@@ -549,6 +549,12 @@ importers:
       open:
         specifier: ^9.1.0
         version: 9.1.0
+
+  samples/level4-custom:
+    devDependencies:
+      vite:
+        specifier: ^5.4.0
+        version: 5.4.19(@types/node@20.19.19)
 
 packages:
 

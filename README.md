@@ -67,8 +67,10 @@ import { LogSourceFactory } from '@nogataka/coding-agent-viewer-sdk/services/log
 const executor = new ExecutionService();
 const logFactory = new LogSourceFactory();
 
-// プロジェクト一覧を取得
-const projects = await logFactory.getAllProjects();
+// プロジェクト一覧を取得（引数なしで全プロファイル、フィルタ指定も可能）
+const projects = await logFactory.getAllProjects('CLAUDE_CODE');
+
+// const projects = await logFactory.getAllProjects(); // ← 全エージェントの結果を取得したい場合はこちら
 
 // エージェントを実行
 const result = await executor.startNewChat({
@@ -289,7 +291,7 @@ npm install @nogataka/coding-agent-viewer-sdk
 ```javascript
 // Execution Module
 import { ExecutionService } from '@nogataka/coding-agent-viewer-sdk/services/execution';
-import { activeExecutionRegistry } from '@nogataka/coding-agent-viewer-sdk/services/execution/activeExecutionRegistry.js';
+import { activeExecutionRegistry } from '@nogataka/coding-agent-viewer-sdk/services/execution/activeExecutionRegistry';
 
 // Log Module
 import { LogSourceFactory } from '@nogataka/coding-agent-viewer-sdk/services/logs';

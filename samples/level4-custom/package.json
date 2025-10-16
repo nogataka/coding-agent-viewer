@@ -1,0 +1,16 @@
+{
+  "name": "coding-agent-viewer-sample-level4",
+  "version": "1.0.0",
+  "description": "Web chat sample using coding-agent-viewer task-attempts API and normalized log stream.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+  },
+  "devDependencies": {
+    "vite": "^5.4.0"
+  }
+}

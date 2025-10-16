@@ -4,6 +4,10 @@ import { BaseExecutorLogSource } from './sources/baseExecutorLogSource.js';
 import { activeExecutionRegistry } from '../execution/activeExecutionRegistry.js';
 export class LogSourceFactory {
     executorSources;
+    sessionRetryOptions = {
+        maxAttempts: 20,
+        delayMs: 250
+    };
     constructor() {
         // 各Executor用のログソースを登録
         this.executorSources = new Map([
@@ -18,9 +22,13 @@ export class LogSourceFactory {
     /**
      * 全Executorのプロジェクト一覧を取得（FILESYSTEM戦略）
      */
-    async getAllProjects() {
+    async getAllProjects(executorFilter) {
         const allProjects = [];
+        const normalizedFilter = executorFilter?.trim();
         for (const [executorType, source] of this.executorSources.entries()) {
+            if (normalizedFilter && executorType.toLowerCase() !== normalizedFilter.toLowerCase()) {
+                continue;
+            }
             try {
                 const projects = await source.getProjectList();
                 // Executor typeをプロジェクト情報に追加
@@ -109,7 +117,7 @@ export class LogSourceFactory {
             return null;
         }
         const { executorType } = parsed;
-        const sessionData = await this.findSessionById(sessionId);
+        const sessionData = await this.waitForSession(sessionId);
         if (!sessionData) {
             return null;
         }
@@ -128,6 +136,22 @@ export class LogSourceFactory {
             logger.error(`[LogSourceFactory] Error getting session ${sessionId}:`, error);
             return null;
         }
+    }
+    async waitForSession(sessionId) {
+        const { maxAttempts, delayMs } = this.sessionRetryOptions;
+        for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+            const sessionData = await this.findSessionById(sessionId);
+            if (sessionData) {
+                return sessionData;
+            }
+            if (attempt < maxAttempts - 1) {
+                await this.delay(delayMs);
+            }
+        }
+        return null;
+    }
+    async delay(ms) {
+        await new Promise((resolve) => setTimeout(resolve, ms));
     }
     async findSessionById(sessionId) {
         const parsed = this.parseSessionId(sessionId);

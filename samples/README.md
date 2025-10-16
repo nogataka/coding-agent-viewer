@@ -1,6 +1,6 @@
 # サンプルアプリケーション
 
-このディレクトリには、Coding Agent Viewerの3つの利用レベルに対応したサンプルアプリケーションが含まれています。
+このディレクトリには、Coding Agent Viewer の利用レベル別サンプルと、Task API/SSE を直接操作するカスタム UI が含まれています。
 
 ## 📚 サンプル一覧
 
@@ -93,6 +93,32 @@ npm start
 - Frontend: `http://localhost:3000`
 - API: `http://localhost:3001`
 
+---
+
+### [Level 4: カスタム Web クライアント](./level4-custom/)
+
+**対象**: 既存の REST/SSE API を使って独自のフロントエンドを構築したい場合
+
+**特徴**:
+- ✅ `/api/task-attempts` で実行を開始
+- ✅ `/api/execution-processes/:id/normalized-logs` を SSE で受信
+- ✅ プロファイル / プロジェクト一覧を API からロード
+- ✅ Vite ベースの最小構成フロントエンド
+
+**使用モジュール**: ブラウザから `fetch` と `EventSource`
+
+**起動方法**:
+```bash
+cd level4-custom
+pnpm install
+pnpm dev
+```
+
+**ユースケース**:
+- OpenAI 互換 UI の差し替え
+- プロジェクトごとに進捗をライブ表示する管理画面
+- SSE を用いたログ可視化の参考実装
+
 **ユースケース**:
 - 5分でデモ実行
 - 社内向けツール
@@ -155,16 +181,16 @@ npm start
 
 ## 📊 比較表
 
-| 項目 | Level 1 | Level 2 | Level 3 |
-|-----|---------|---------|---------|
-| **起動の簡単さ** | ⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
-| **カスタマイズ性** | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐ |
-| **リソース消費** | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐ |
-| **エンドユーザー向き** | ⭐ | ⭐⭐ | ⭐⭐⭐⭐⭐ |
-| **開発者向き** | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐ |
-| **HTTP不要** | ✅ | ❌ | ❌ |
-| **UI付き** | ❌ | ❌ | ✅ |
-| **Docker対応** | ⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
+| 項目 | Level 1 | Level 2 | Level 3 | Level 4 |
+|-----|---------|---------|---------|---------|
+| **起動の簡単さ** | ⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ |
+| **カスタマイズ性** | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
+| **リソース消費** | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐⭐ |
+| **エンドユーザー向き** | ⭐ | ⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ |
+| **開発者向き** | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
+| **HTTP不要** | ✅ | ❌ | ❌ | ❌ |
+| **UI付き** | ❌ | ❌ | ✅ | ✅ |
+| **Docker対応** | ⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐ |
 
 ---
 
@@ -186,6 +212,14 @@ npm run dev
 npm run test:api
 
 # Level 3（フルスタック）
+```
+
+```bash
+# Level 4（タスクAPI + SSE フロント）
+cd /Users/nogataka/dev/coding-agent-viewer/samples/level4-custom
+pnpm install
+pnpm dev
+```
 cd /Users/nogataka/dev/coding-agent-viewer/samples/level3-fullstack
 npm install
 npm start

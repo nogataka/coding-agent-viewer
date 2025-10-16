@@ -46,9 +46,8 @@ router.get('/', async (req: Request, res: Response) => {
       `[projects] Listing projects for profile=${currentProfile} (executor=${executorType})`
     );
 
-    const allProjects = await factory.getAllProjects();
-    const filtered = allProjects.filter((project) => project.id.startsWith(`${executorType}:`));
-    const projects = filtered.map(toProjectResponse);
+    const filteredProjects = await factory.getAllProjects(executorType);
+    const projects = filteredProjects.map(toProjectResponse);
 
     res.json({
       success: true,

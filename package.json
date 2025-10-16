@@ -20,7 +20,8 @@
     "backend:start": "cd backend && npm run start",
     "install:all": "npm install --prefix frontend && npm install --prefix backend && npm install --prefix packages/cli && npm install --prefix packages/sdk",
     "build:cli": "bash ./local-build.sh",
-    "build": "npm run backend:build && cd frontend && npm run build"
+    "build:sdk": "pnpm --filter @nogataka/coding-agent-viewer-sdk run build",
+    "build": "npm run build:sdk && npm run backend:build && cd frontend && npm run build"
   },
   "devDependencies": {
     "@tailwindcss/container-queries": "^0.1.1",

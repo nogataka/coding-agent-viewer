@@ -32,14 +32,14 @@ level1-library/
 
 ## インストール
 
-npmパッケージ`@nogataka/coding-agent-viewer-sdk`を使用するため、バックエンドのビルドは不要です：
+このサンプルは npm でも実行できますが、リポジトリ直下では pnpm ワークスペース経由で依存を解決するのが安全です。
 
 ```bash
-cd samples/level1-library
-npm install
+# リポジトリのルートで実行
+pnpm install --filter samples/level1-library
 ```
 
-> **Note**: このサンプルは公開されたnpmパッケージ `@nogataka/coding-agent-viewer-sdk@latest` を使用します。
+> **Tip**: サンプルをほかのプロジェクトへコピーした場合は、そのコピー先で `npm install` を実行すると公開済み `@nogataka/coding-agent-viewer-sdk@latest` が取得できます。
 
 ## 使用方法
 
@@ -322,8 +322,16 @@ import { LogSourceFactory } from '@nogataka/coding-agent-viewer-sdk/services/log
 
 const factory = new LogSourceFactory();
 
-// すべてのプロジェクトを取得
-const projects = await factory.getAllProjects();
+// プロジェクトを取得（引数なしで全体、フィルタ指定も可能）
+const projects = await factory.getAllProjects('CLAUDE_CODE');
+
+// 利用可能なプロファイルを列挙
+import { getProfiles } from '@nogataka/coding-agent-viewer-sdk/services/execution';
+
+const profiles = getProfiles();
+profiles.forEach((profile) => {
+  console.log(profile.label, profile.variants);
+});
 
 // セッション一覧を取得
 const sessions = await factory.getSessionsForProject('CLAUDE_CODE:...');

@@ -58,9 +58,9 @@ services/src/logs/
 
 #### 主要機能
 
-##### `getAllProjects(): Promise<ProjectInfo[]>`
+##### `getAllProjects(executorFilter?: string): Promise<ProjectInfo[]>`
 
-**説明**: すべてのエージェントからプロジェクト一覧を取得
+**説明**: すべてのエージェントからプロジェクト一覧を取得。`executorFilter` を渡すと対象 Executor のみを走査。
 
 **戻り値**:
 ```typescript
@@ -74,7 +74,7 @@ interface ProjectInfo {
 ```
 
 **処理フロー**:
-1. すべてのエージェントのログソースを取得
+1. フィルタが指定された場合は対象 Executor を事前に絞り込み
 2. 各ログソースから `getProjectList()` を呼び出し
 3. プロジェクトIDにExecutor Typeプレフィックスを追加
 4. すべてのプロジェクトをマージし、更新日時の降順でソート
@@ -449,6 +449,8 @@ toolEntryMap: Map<string, { index: number; entry: NormalizedEntry }>
 4. **ログパース**: エージェント固有のJSONLフォーマットをパース
 5. **正規化**: 共通の `NormalizedEntry` 形式に変換
 
+特に `OpencodeLogSource` では、最新バージョンから `session/`, `message/`, `part/` ディレクトリを同時に監視し、メタデータ＋パートファイルを統合して `json_patch` を生成するようになりました。初回読み込み時に既存ファイルを正規化したのち、`chokidar` で追加・更新を検知し、ツール実行結果・テキストレスポンスをリアルタイムで反映します。
+
 ## 型定義 (`executors/types.ts`)
 
 ### NormalizedEntry
@@ -636,8 +638,9 @@ import { LogSourceFactory } from '@coding-agent-viewer/log-module';
 
 const factory = new LogSourceFactory();
 
-// すべてのプロジェクトを取得
-const projects = await factory.getAllProjects();
+// すべて or 指定 Executor のプロジェクトを取得
+const projects = await factory.getAllProjects('CLAUDE_CODE');
+// 引数を省略すると全 Executor 分が返る
 
 // セッション一覧を取得
 const sessions = await factory.getSessionsForProject('CLAUDE_CODE:...');

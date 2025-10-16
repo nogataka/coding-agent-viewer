@@ -1,5 +1,8 @@
 import { Router } from 'express';
+import * as os from 'os';
+import * as path from 'path';
 import { ExecutionService } from '../../services/execution/index.js';
+import { LogSourceFactory } from '../../services/logs/index.js';
 import { logger } from '../../utils/logger.js';
 const router = Router();
 const EXECUTOR_PROFILE_MAP = {
@@ -10,6 +13,7 @@ const EXECUTOR_PROFILE_MAP = {
     OPENCODE: 'opencode'
 };
 const executionService = new ExecutionService();
+const logSourceFactory = new LogSourceFactory();
 const decodeProjectId = (projectId) => {
     const [executorType, ...rest] = projectId.split(':');
     if (!executorType || rest.length === 0) {
@@ -30,13 +34,34 @@ const decodeSessionId = (sessionId) => {
 const resolveProfileLabel = (executorType) => {
     return EXECUTOR_PROFILE_MAP[executorType] ?? executorType.toLowerCase();
 };
-const toWorkspacePath = (encodedPath) => {
+const toWorkspacePath = async (projectId, executorType, actualProjectId) => {
     try {
-        return Buffer.from(encodedPath, 'base64url').toString('utf-8');
+        const lookup = await logSourceFactory.findProjectById(projectId);
+        if (lookup?.project.git_repo_path) {
+            return lookup.project.git_repo_path;
+        }
     }
     catch (error) {
-        logger.warn(`Failed to decode workspace path: ${encodedPath}`);
-        return encodedPath;
+        logger.warn(`[taskAttempts] Failed to resolve project info for ${projectId}:`, error);
+    }
+    try {
+        const decoded = Buffer.from(actualProjectId, 'base64url').toString('utf-8');
+        if (decoded && decoded !== actualProjectId) {
+            return decoded;
+        }
+    }
+    catch {
+        // no-op
+    }
+    switch (executorType) {
+        case 'GEMINI':
+            return path.join(os.homedir(), '.gemini', 'tmp', actualProjectId);
+        case 'CLAUDE_CODE':
+            return path.join(os.homedir(), '.claude', 'projects', actualProjectId);
+        case 'CURSOR':
+            return path.join(os.homedir(), '.cursor', 'workspace', actualProjectId);
+        default:
+            return actualProjectId;
     }
 };
 router.post('/', async (req, res) => {
@@ -68,13 +93,14 @@ router.post('/', async (req, res) => {
             });
         }
         const profileLabel = resolveProfileLabel(decoded.executorType);
+        const workspacePath = await toWorkspacePath(projectId, decoded.executorType, decoded.actualProjectId);
         const result = await executionService.startNewChat({
             profileLabel,
             variantLabel: typeof variantLabel === 'string' ? variantLabel : undefined,
             executorType: decoded.executorType,
             projectId,
             actualProjectId: decoded.actualProjectId,
-            workspacePath: toWorkspacePath(decoded.actualProjectId),
+            workspacePath,
             prompt
         });
         return res.status(202).json({
@@ -123,18 +149,19 @@ router.post('/:sessionId/follow-up', async (req, res) => {
                 message: 'Invalid session id'
             });
         }
-        const projectId = `${decoded.executorType}:${decoded.actualProjectId}`;
-        const profileLabel = resolveProfileLabel(decoded.executorType);
-        const result = await executionService.sendFollowUp({
-            profileLabel,
-            variantLabel: typeof variantLabel === 'string' ? variantLabel : undefined,
-            executorType: decoded.executorType,
-            projectId,
-            actualProjectId: decoded.actualProjectId,
-            workspacePath: toWorkspacePath(decoded.actualProjectId),
-            sessionId,
-            message
-        });
+    const projectId = `${decoded.executorType}:${decoded.actualProjectId}`;
+    const profileLabel = resolveProfileLabel(decoded.executorType);
+    const workspacePath = await toWorkspacePath(projectId, decoded.executorType, decoded.actualProjectId);
+    const result = await executionService.sendFollowUp({
+        profileLabel,
+        variantLabel: typeof variantLabel === 'string' ? variantLabel : undefined,
+        executorType: decoded.executorType,
+        projectId,
+        actualProjectId: decoded.actualProjectId,
+        workspacePath,
+        sessionId,
+        message
+    });
         return res.status(202).json({
             success: true,
             data: result,

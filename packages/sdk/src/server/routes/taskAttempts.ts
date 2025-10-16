@@ -1,5 +1,8 @@
 import { Router, Request, Response } from 'express';
+import * as os from 'os';
+import * as path from 'path';
 import { ExecutionService } from '../../services/execution/index.js';
+import { LogSourceFactory } from '../../services/logs/index.js';
 import { logger } from '../../utils/logger.js';
 
 const router = Router();
@@ -13,6 +16,7 @@ const EXECUTOR_PROFILE_MAP: Record<string, string> = {
 };
 
 const executionService = new ExecutionService();
+const logSourceFactory = new LogSourceFactory();
 
 const decodeProjectId = (
   projectId: string
@@ -41,12 +45,41 @@ const resolveProfileLabel = (executorType: string): string => {
   return EXECUTOR_PROFILE_MAP[executorType] ?? executorType.toLowerCase();
 };
 
-const toWorkspacePath = (encodedPath: string): string => {
+const toWorkspacePath = async (
+  projectId: string,
+  executorType: string,
+  actualProjectId: string
+): Promise<string> => {
   try {
-    return Buffer.from(encodedPath, 'base64url').toString('utf-8');
+    const lookup = await logSourceFactory.findProjectById(projectId);
+    if (lookup?.project.git_repo_path) {
+      return lookup.project.git_repo_path;
+    }
   } catch (error) {
-    logger.warn(`Failed to decode workspace path: ${encodedPath}`);
-    return encodedPath;
+    logger.warn(
+      `[taskAttempts] Failed to resolve project info for ${projectId}:`,
+      error
+    );
+  }
+
+  try {
+    const decoded = Buffer.from(actualProjectId, 'base64url').toString('utf-8');
+    if (decoded && decoded !== actualProjectId) {
+      return decoded;
+    }
+  } catch {
+    // no-op: fall back to executor-specific heuristics
+  }
+
+  switch (executorType) {
+    case 'GEMINI':
+      return path.join(os.homedir(), '.gemini', 'tmp', actualProjectId);
+    case 'CLAUDE_CODE':
+      return path.join(os.homedir(), '.claude', 'projects', actualProjectId);
+    case 'CURSOR':
+      return path.join(os.homedir(), '.cursor', 'workspace', actualProjectId);
+    default:
+      return actualProjectId;
   }
 };
 
@@ -84,13 +117,19 @@ router.post('/', async (req: Request, res: Response) => {
 
     const profileLabel = resolveProfileLabel(decoded.executorType);
 
+    const workspacePath = await toWorkspacePath(
+      projectId,
+      decoded.executorType,
+      decoded.actualProjectId
+    );
+
     const result = await executionService.startNewChat({
       profileLabel,
       variantLabel: typeof variantLabel === 'string' ? variantLabel : undefined,
       executorType: decoded.executorType,
       projectId,
       actualProjectId: decoded.actualProjectId,
-      workspacePath: toWorkspacePath(decoded.actualProjectId),
+      workspacePath,
       prompt
     });
 
@@ -146,6 +185,11 @@ router.post('/:sessionId/follow-up', async (req: Request, res: Response) => {
 
     const projectId = `${decoded.executorType}:${decoded.actualProjectId}`;
     const profileLabel = resolveProfileLabel(decoded.executorType);
+    const workspacePath = await toWorkspacePath(
+      projectId,
+      decoded.executorType,
+      decoded.actualProjectId
+    );
 
     const result = await executionService.sendFollowUp({
       profileLabel,
@@ -153,7 +197,7 @@ router.post('/:sessionId/follow-up', async (req: Request, res: Response) => {
       executorType: decoded.executorType,
       projectId,
       actualProjectId: decoded.actualProjectId,
-      workspacePath: toWorkspacePath(decoded.actualProjectId),
+      workspacePath,
       sessionId,
       message
     });

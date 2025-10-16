@@ -13,15 +13,31 @@ import { readFile, readdir, stat } from 'fs/promises';
 
 const OPENCODE_STORAGE_ROOT = path.join(os.homedir(), '.local', 'share', 'opencode', 'storage');
 const SESSION_DIR = path.join(OPENCODE_STORAGE_ROOT, 'session');
+const PROJECT_DIR = path.join(OPENCODE_STORAGE_ROOT, 'project');
+const GLOBAL_SESSION_DIR = path.join(SESSION_DIR, 'global');
 const SESSION_SCAN_INTERVAL_MS = 500;
 const SESSION_STALENESS_ALLOWANCE_MS = 5_000;
 
 type SessionFileMetadata = {
   id: string | null;
+  projectId: string | null;
   directory: string | null;
   createdAtMs: number | null;
   updatedAtMs: number | null;
 };
+
+type ProjectCacheEntry = {
+  projectId: string;
+  candidatePaths: string[];
+};
+
+type ProjectCacheState = {
+  mtimeMs: number | null;
+  entries: ProjectCacheEntry[];
+};
+
+let projectCache: ProjectCacheState | null = null;
+let projectCachePromise: Promise<ProjectCacheState> | null = null;
 
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -38,6 +54,120 @@ const normalizePath = (value: string | null | undefined): string | null => {
 
 const encodeWorkspace = (workspacePath: string): string => {
   return Buffer.from(workspacePath).toString('base64url');
+};
+
+const addCandidatePath = (target: Set<string>, candidate: string | null) => {
+  if (!candidate) {
+    return;
+  }
+
+  let current = candidate;
+  const visited = new Set<string>();
+  while (current && !visited.has(current)) {
+    target.add(current);
+    visited.add(current);
+    const base = path.basename(current);
+    if (base === '.git' || base === 'modules') {
+      const parent = path.dirname(current);
+      if (!parent || parent === current) {
+        break;
+      }
+      current = parent;
+      continue;
+    }
+    break;
+  }
+};
+
+const loadProjectCache = async (expectedMtime: number | null): Promise<ProjectCacheState> => {
+  const entries: ProjectCacheEntry[] = [];
+
+  let files: string[];
+  try {
+    files = await readdir(PROJECT_DIR);
+  } catch {
+    return { entries, mtimeMs: expectedMtime };
+  }
+
+  for (const file of files) {
+    if (!file.endsWith('.json')) {
+      continue;
+    }
+
+    const projectId = file.slice(0, -5);
+    const fullPath = path.join(PROJECT_DIR, file);
+
+    try {
+      const raw = await readFile(fullPath, 'utf-8');
+      const parsed = JSON.parse(raw) as { worktree?: unknown; directory?: unknown };
+
+      const candidates = new Set<string>();
+      const worktree =
+        typeof parsed.worktree === 'string' ? normalizePath(parsed.worktree) : null;
+      const directory =
+        typeof parsed.directory === 'string' ? normalizePath(parsed.directory) : null;
+
+      addCandidatePath(candidates, worktree);
+      addCandidatePath(candidates, directory);
+
+      if (candidates.size > 0) {
+        entries.push({ projectId, candidatePaths: Array.from(candidates) });
+      }
+    } catch {
+      // ignore malformed project metadata
+    }
+  }
+
+  return { entries, mtimeMs: expectedMtime };
+};
+
+const ensureProjectCache = async (): Promise<ProjectCacheState> => {
+  const stats = await stat(PROJECT_DIR).catch(() => null);
+  const currentMtime = stats?.mtimeMs ?? null;
+
+  if (projectCache && projectCache.mtimeMs === currentMtime) {
+    return projectCache;
+  }
+
+  if (!projectCachePromise) {
+    projectCachePromise = loadProjectCache(currentMtime).finally(() => {
+      projectCachePromise = null;
+    });
+  }
+
+  projectCache = await projectCachePromise;
+  return projectCache;
+};
+
+const findProjectIdForWorkspace = async (workspacePath: string): Promise<string | null> => {
+  const normalizedWorkspace = normalizePath(workspacePath);
+  if (!normalizedWorkspace) {
+    return null;
+  }
+
+  const cache = await ensureProjectCache();
+  let best: { projectId: string; score: number } | null = null;
+
+  for (const entry of cache.entries) {
+    for (const candidate of entry.candidatePaths) {
+      if (!candidate) {
+        continue;
+      }
+
+      if (
+        normalizedWorkspace === candidate ||
+        normalizedWorkspace.startsWith(candidate + path.sep) ||
+        candidate.startsWith(normalizedWorkspace + path.sep)
+      ) {
+        const score = candidate.length;
+        if (!best || score > best.score) {
+          best = { projectId: entry.projectId, score };
+        }
+      }
+    }
+  }
+
+  return best?.projectId ?? null;
 };
 
 const parseCompositeSessionId = (
@@ -60,6 +190,7 @@ const readSessionMetadata = async (filePath: string): Promise<SessionFileMetadat
     const parsed = JSON.parse(raw) as {
       id?: unknown;
       directory?: unknown;
+      projectID?: unknown;
       time?: { created?: unknown; updated?: unknown };
     };
 
@@ -81,6 +212,7 @@ const readSessionMetadata = async (filePath: string): Promise<SessionFileMetadat
 
     return {
       id: typeof parsed.id === 'string' ? parsed.id : null,
+      projectId: typeof parsed.projectID === 'string' ? parsed.projectID : null,
       directory: typeof parsed.directory === 'string' ? parsed.directory : null,
       createdAtMs: toMillis(createdValue),
       updatedAtMs: toMillis(updatedValue)
@@ -95,16 +227,27 @@ const findLatestSessionUuid = async (
   workspacePath: string,
   startedAt: Date
 ): Promise<string | null> => {
+  const normalizedWorkspace = normalizePath(workspacePath);
+  const resolvedProjectId = normalizedWorkspace
+    ? await findProjectIdForWorkspace(normalizedWorkspace)
+    : null;
+
   const candidateDirs = new Set<string>();
+
   if (projectId) {
     candidateDirs.add(path.join(SESSION_DIR, projectId));
   }
 
-  if (workspacePath) {
-    candidateDirs.add(path.join(SESSION_DIR, encodeWorkspace(workspacePath)));
+  if (resolvedProjectId) {
+    candidateDirs.add(path.join(SESSION_DIR, resolvedProjectId));
   }
 
-  const normalizedWorkspace = normalizePath(workspacePath);
+  if (normalizedWorkspace) {
+    candidateDirs.add(path.join(SESSION_DIR, encodeWorkspace(normalizedWorkspace)));
+  }
+
+  candidateDirs.add(GLOBAL_SESSION_DIR);
+
   const launchedAtMs = startedAt.getTime();
   let best: { sessionId: string; updatedAtMs: number } | null = null;
 
@@ -124,6 +267,10 @@ const findLatestSessionUuid = async (
       const fullPath = path.join(dir, entry);
       const metadata = await readSessionMetadata(fullPath);
       if (!metadata || !metadata.id) {
+        continue;
+      }
+
+      if (resolvedProjectId && metadata.projectId && metadata.projectId !== resolvedProjectId) {
         continue;
       }
 

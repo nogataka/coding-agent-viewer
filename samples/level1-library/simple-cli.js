@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { LogSourceFactory } from '@nogataka/coding-agent-viewer-sdk/services/logs';
-import { ExecutionService } from '@nogataka/coding-agent-viewer-sdk/services/execution';
-import { activeExecutionRegistry } from '@nogataka/coding-agent-viewer-sdk/services/execution/activeExecutionRegistry.js';
+import { ExecutionService, getProfiles } from '@nogataka/coding-agent-viewer-sdk/services/execution';
+import { activeExecutionRegistry } from '@nogataka/coding-agent-viewer-sdk/services/execution/activeExecutionRegistry';
 import chalk from 'chalk';
 import ora from 'ora';
 import inquirer from 'inquirer';
@@ -14,20 +14,36 @@ import { join } from 'path';
  * ccresume-codexを参考に作成
  */
 
-// 利用可能なプロファイル
-const PROFILES = [
-  { name: 'Claude Code', value: 'claude-code', type: 'CLAUDE_CODE' },
-  { name: 'Cursor', value: 'cursor', type: 'CURSOR' },
-  { name: 'Gemini', value: 'gemini', type: 'GEMINI' },
-  { name: 'Codex', value: 'codex', type: 'CODEX' },
-  { name: 'Opencode', value: 'opencode', type: 'OPENCODE' }
-];
+const capitalize = (value) =>
+  value.length === 0 ? value : value[0].toUpperCase() + value.slice(1);
+
+const toExecutorType = (label) => label.toUpperCase().replace(/-/g, '_');
+
+const toDisplayName = (label) =>
+  label
+    .split('-')
+    .map((segment) => capitalize(segment))
+    .join(' ');
 
 class AgentCLI {
   constructor() {
     this.factory = new LogSourceFactory();
     this.executor = new ExecutionService();
+    this.profileCatalog = getProfiles().map((definition) => ({
+      label: definition.label,
+      executorType: toExecutorType(definition.label),
+      displayName: toDisplayName(definition.label),
+      variants: definition.variants?.map((variant) => variant.label) ?? []
+    }));
+    this.profileByExecutor = new Map();
+    this.profileByLabel = new Map();
+    this.profileCatalog.forEach((profile) => {
+      this.profileByExecutor.set(profile.executorType, profile);
+      this.profileByLabel.set(profile.label, profile);
+    });
+    this.projectCache = new Map();
     this.currentProfile = null;
+    this.currentProjectList = [];
     this.currentProject = null;
   }
 
@@ -68,56 +84,65 @@ class AgentCLI {
 
   // プロジェクトブラウザ
   async browseProjects() {
-    const spinner = ora('Loading projects...').start();
+    const profileChoices = this.profileCatalog.map((profile) => ({
+      name: `${this.getProfileIcon(profile.executorType)} ${profile.displayName}`,
+      value: profile
+    }));
+
+    profileChoices.push({ name: chalk.gray('← Back'), value: null });
+
+    const { selectedProfile } = await inquirer.prompt([
+      {
+        type: 'list',
+        name: 'selectedProfile',
+        message: 'Select agent profile:',
+        choices: profileChoices,
+        pageSize: 15
+      }
+    ]);
+
+    if (!selectedProfile) {
+      return this.start();
+    }
 
     try {
-      const allProjects = await this.factory.getAllProjects();
-      spinner.stop();
+      const projects = await this.loadProjectsForProfile(selectedProfile);
 
-      if (allProjects.length === 0) {
-        console.log(chalk.yellow('\n⚠️  No projects found'));
+      if (projects.length === 0) {
+        console.log(chalk.yellow(`\n⚠️  No projects found for ${selectedProfile.displayName}`));
         await this.pressAnyKey();
         return this.start();
       }
 
-      // プロファイルでグループ化
-      const projectsByProfile = this.groupProjectsByProfile(allProjects);
-
-      // プロファイル選択
-      const profileChoices = Object.entries(projectsByProfile).map(([profile, projects]) => ({
-        name: `${this.getProfileIcon(profile)} ${profile} (${projects.length} projects)`,
-        value: profile
-      }));
-
-      profileChoices.push({ name: chalk.gray('← Back'), value: 'back' });
-
-      const { selectedProfile } = await inquirer.prompt([
-        {
-          type: 'list',
-          name: 'selectedProfile',
-          message: 'Select agent profile:',
-          choices: profileChoices,
-          pageSize: 15
-        }
-      ]);
-
-      if (selectedProfile === 'back') {
-        return this.start();
-      }
-
       this.currentProfile = selectedProfile;
-      await this.selectProject(projectsByProfile[selectedProfile]);
-
+      await this.selectProject(projects, selectedProfile);
     } catch (error) {
-      spinner.stop();
       console.error(chalk.red(`\n❌ Error: ${error.message}\n`));
       await this.pressAnyKey();
       return this.start();
     }
   }
 
+  async loadProjectsForProfile(profileMeta, { forceRefresh = false } = {}) {
+    if (!forceRefresh && this.projectCache.has(profileMeta.executorType)) {
+      return this.projectCache.get(profileMeta.executorType);
+    }
+
+    const spinner = ora(`Loading projects for ${profileMeta.displayName}...`).start();
+    try {
+      const projects = await this.factory.getAllProjects(profileMeta.executorType);
+      spinner.stop();
+      this.projectCache.set(profileMeta.executorType, projects);
+      return projects;
+    } catch (error) {
+      spinner.stop();
+      throw error;
+    }
+  }
+
   // プロジェクト選択
-  async selectProject(projects) {
+  async selectProject(projects, profileMeta) {
+    this.currentProjectList = projects;
     const projectChoices = projects.map(p => ({
       name: this.formatProjectName(p),
       value: p,
@@ -130,7 +155,7 @@ class AgentCLI {
       {
         type: 'list',
         name: 'selectedProject',
-        message: `Projects (${this.currentProfile}):`,
+        message: `Projects (${profileMeta.displayName}):`,
         choices: projectChoices,
         pageSize: 15
       }
@@ -138,15 +163,16 @@ class AgentCLI {
 
     if (selectedProject === 'back') {
       this.currentProfile = null;
+      this.currentProjectList = [];
       return this.browseProjects();
     }
 
     this.currentProject = selectedProject;
-    await this.viewProject(selectedProject);
+    await this.viewProject(selectedProject, projects, profileMeta);
   }
 
   // プロジェクト詳細
-  async viewProject(project) {
+  async viewProject(project, projectList, profileMeta) {
     const spinner = ora('Loading sessions...').start();
 
     try {
@@ -154,6 +180,7 @@ class AgentCLI {
       spinner.stop();
 
       console.log(chalk.blue(`\n📂 ${project.name}`));
+      console.log(chalk.gray(`   Profile: ${profileMeta.displayName}`));
       console.log(chalk.gray(`   ID: ${project.id}`));
       console.log(chalk.gray(`   Sessions: ${sessions.length}`));
       console.log();
@@ -161,7 +188,7 @@ class AgentCLI {
       if (sessions.length === 0) {
         console.log(chalk.yellow('   No sessions found'));
         await this.pressAnyKey();
-        return this.selectProject([project]);
+        return this.selectProject(projectList, profileMeta);
       }
 
       const { action } = await inquirer.prompt([
@@ -179,26 +206,26 @@ class AgentCLI {
 
       switch (action) {
         case 'sessions':
-          await this.selectSession(sessions);
+          await this.selectSession(sessions, projectList, profileMeta);
           break;
         case 'new':
-          await this.startNewSession(project);
+          await this.startNewSession(project, profileMeta);
           break;
         case 'back':
           this.currentProject = null;
-          return this.browseProjects();
+          return this.selectProject(projectList, profileMeta);
       }
 
     } catch (error) {
       spinner.stop();
       console.error(chalk.red(`\n❌ Error: ${error.message}\n`));
       await this.pressAnyKey();
-      return this.selectProject([project]);
+      return this.selectProject(projectList, profileMeta);
     }
   }
 
   // 新しいセッション開始（既存プロジェクト）
-  async startNewSession(project) {
+  async startNewSession(project, profileMeta) {
     const { prompt } = await inquirer.prompt([
       {
         type: 'input',
@@ -213,8 +240,11 @@ class AgentCLI {
     try {
       // プロジェクトIDからexecutorTypeとworkspacePathを取得
       const [executorType, actualProjectId] = project.id.split(':');
-      const profileLabel = this.getProfileLabelFromExecutorType(executorType);
-      const workspacePath = this.decodeBase64url(actualProjectId);
+      const profileLabel = profileMeta?.label ?? this.getProfileLabelFromExecutorType(executorType);
+      const decodedProjectKey = this.decodeBase64url(actualProjectId);
+      const workspacePath = project.git_repo_path
+        ? project.git_repo_path
+        : this.toWorkspacePath(decodedProjectKey);
 
       const result = await this.executor.startNewChat({
         profileLabel,
@@ -252,19 +282,19 @@ class AgentCLI {
         };
         await this.streamLogs(session);
       } else {
-        return this.viewProject(project);
+        return this.viewProject(project, this.currentProjectList, profileMeta ?? this.currentProfile);
       }
 
     } catch (error) {
       spinner.fail('Failed to start session');
       console.error(chalk.red(`   ${error.message}`));
       await this.pressAnyKey();
-      return this.viewProject(project);
+      return this.viewProject(project, this.currentProjectList, profileMeta ?? this.currentProfile);
     }
   }
 
   // セッション選択
-  async selectSession(sessions) {
+  async selectSession(sessions, projectList, profileMeta) {
     const sessionChoices = sessions.slice(0, 50).map(s => ({
       name: this.formatSessionName(s),
       value: s,
@@ -284,14 +314,14 @@ class AgentCLI {
     ]);
 
     if (selectedSession === 'back') {
-      return this.viewProject(this.currentProject);
+      return this.viewProject(this.currentProject, projectList ?? this.currentProjectList, profileMeta ?? this.currentProfile);
     }
 
-    await this.viewSession(selectedSession);
+    await this.viewSession(selectedSession, projectList ?? this.currentProjectList, profileMeta ?? this.currentProfile);
   }
 
   // セッション詳細表示
-  async viewSession(session) {
+  async viewSession(session, projectList = this.currentProjectList, profileMeta = this.currentProfile) {
     console.log(chalk.blue(`\n📝 ${session.title}`));
     console.log(chalk.gray(`   ID: ${session.id}`));
     console.log(chalk.gray(`   Status: ${this.getStatusIcon(session.status)} ${session.status}`));
@@ -332,7 +362,7 @@ class AgentCLI {
       case 'back':
         // セッション一覧に戻る
         const sessions = await this.factory.getSessionsForProject(this.currentProject.id);
-        return this.selectSession(sessions);
+        return this.selectSession(sessions, projectList, profileMeta);
     }
   }
 
@@ -344,7 +374,7 @@ class AgentCLI {
     console.log();
 
     try {
-      const stream = await this.factory.getSessionStream(session.id);
+      const stream = await this.waitForSessionStream(session);
 
       if (!stream) {
         console.log(chalk.red('❌ Failed to get log stream'));
@@ -407,6 +437,30 @@ class AgentCLI {
     }
   }
 
+  async waitForSessionStream(session) {
+    const maxAttempts = 20;
+    const delayMs = 500;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const stream = await this.factory.getSessionStream(session.id);
+      if (stream) {
+        return stream;
+      }
+
+      try {
+        const [executorType] = session.id.split(':');
+        const profileMeta = this.profileByExecutor.get(executorType);
+        await this.factory.getAllProjects(profileMeta?.executorType);
+      } catch (error) {
+        console.warn('⚠️  Refresh projects failed:', error.message);
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+
+    return null;
+  }
+
   // フォローアップ送信
   async sendFollowup(session) {
     const { message } = await inquirer.prompt([
@@ -424,13 +478,17 @@ class AgentCLI {
       // セッションIDをパース
       const [executorType, actualProjectId, ...rest] = session.id.split(':');
       const profileLabel = this.getProfileLabelFromExecutorType(executorType);
-      
+      const decodedProjectKey = this.decodeBase64url(actualProjectId);
+      const workspacePath = session.workspacePath
+        ? session.workspacePath
+        : this.toWorkspacePath(decodedProjectKey);
+
       const result = await this.executor.sendFollowUp({
         profileLabel,
         executorType,
         projectId: session.projectId,
         actualProjectId,
-        workspacePath: session.workspacePath || this.decodeBase64url(actualProjectId),
+        workspacePath,
         sessionId: session.id,
         message
       });
@@ -488,14 +546,35 @@ class AgentCLI {
 
   // クイック実行
   async quickExecute() {
+    const profileChoices = this.profileCatalog.map((profile) => ({
+      name: `${this.getProfileIcon(profile.executorType)} ${profile.displayName}`,
+      value: profile
+    }));
+
     const { profile } = await inquirer.prompt([
       {
         type: 'list',
         name: 'profile',
         message: 'Select agent profile:',
-        choices: PROFILES.map(p => ({ name: `${this.getProfileIcon(p.type)} ${p.name}`, value: p }))
+        choices: profileChoices
       }
     ]);
+
+    let selectedVariant = null;
+    if (profile.variants.length > 0) {
+      const { variant } = await inquirer.prompt([
+        {
+          type: 'list',
+          name: 'variant',
+          message: 'Select profile variant:',
+          choices: [
+            { name: 'Default', value: null },
+            ...profile.variants.map((variantLabel) => ({ name: variantLabel, value: variantLabel }))
+          ]
+        }
+      ]);
+      selectedVariant = variant;
+    }
 
     const { workspace } = await inquirer.prompt([
       {
@@ -520,15 +599,16 @@ class AgentCLI {
 
     try {
       const actualProjectId = Buffer.from(workspace).toString('base64url');
-      const projectId = `${profile.type}:${actualProjectId}`;
+      const projectId = `${profile.executorType}:${actualProjectId}`;
 
       const result = await this.executor.startNewChat({
-        profileLabel: profile.value,
-        executorType: profile.type,
+        profileLabel: profile.label,
+        executorType: profile.executorType,
         projectId,
         actualProjectId,
         workspacePath: workspace,
-        prompt
+        prompt,
+        ...(selectedVariant ? { variantLabel: selectedVariant } : {})
       });
 
       spinner.succeed('Execution started!');
@@ -577,13 +657,21 @@ class AgentCLI {
     const spinner = ora('Checking active sessions...').start();
     
     try {
-      const allProjects = await this.factory.getAllProjects();
       const activeSessions = [];
+      for (const profile of this.profileCatalog) {
+        let projects = [];
+        try {
+          projects = await this.factory.getAllProjects(profile.executorType);
+        } catch (error) {
+          console.warn(`⚠️  Failed to fetch projects for ${profile.displayName}:`, error.message);
+          continue;
+        }
 
-      for (const project of allProjects) {
-        const sessions = await this.factory.getSessionsForProject(project.id);
-        const active = sessions.filter(s => s.status === 'running');
-        activeSessions.push(...active.map(s => ({ ...s, project })));
+        for (const project of projects) {
+          const sessions = await this.factory.getSessionsForProject(project.id);
+          const active = sessions.filter((s) => s.status === 'running');
+          activeSessions.push(...active.map((s) => ({ ...s, project, profile })));
+        }
       }
 
       spinner.stop();
@@ -598,6 +686,7 @@ class AgentCLI {
 
       activeSessions.forEach((s, i) => {
         console.log(`${i + 1}. ${chalk.blue(s.title)}`);
+        console.log(`   Profile: ${s.profile?.displayName ?? this.getProfileLabelFromExecutorType(s.project.id.split(':')[0])}`);
         console.log(`   Project: ${s.project.name}`);
         console.log(`   Started: ${new Date(s.createdAt).toLocaleString()}`);
         console.log();
@@ -639,16 +728,21 @@ class AgentCLI {
     return icons[status] || '⚪';
   }
 
-  groupProjectsByProfile(projects) {
-    const grouped = {};
-    for (const project of projects) {
-      const [profile] = project.id.split(':');
-      if (!grouped[profile]) {
-        grouped[profile] = [];
-      }
-      grouped[profile].push(project);
+  toWorkspacePath(candidate) {
+    if (typeof candidate !== 'string' || candidate.length === 0) {
+      return candidate;
     }
-    return grouped;
+
+    if (candidate.startsWith('/')) {
+      return candidate;
+    }
+
+    if (!candidate.startsWith('-')) {
+      return candidate;
+    }
+
+    const normalized = candidate.replace(/^-/, '').replace(/-$/, '').replace(/-/g, '/');
+    return normalized.startsWith('/') ? normalized : `/${normalized}`;
   }
 
   formatProjectName(project) {
@@ -685,14 +779,7 @@ class AgentCLI {
   }
 
   getProfileLabelFromExecutorType(executorType) {
-    const mapping = {
-      'CLAUDE_CODE': 'claude-code',
-      'CURSOR': 'cursor',
-      'GEMINI': 'gemini',
-      'CODEX': 'codex',
-      'OPENCODE': 'opencode'
-    };
-    return mapping[executorType] || executorType.toLowerCase();
+    return this.profileByExecutor.get(executorType)?.label ?? executorType.toLowerCase();
   }
 
   decodeBase64url(encoded) {

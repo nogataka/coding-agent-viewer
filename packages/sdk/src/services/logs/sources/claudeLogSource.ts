@@ -16,6 +16,7 @@ export class ClaudeLogSource extends BaseExecutorLogSource {
   private readonly CLAUDE_PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
   private reportedModel = false;
   private toolEntryMap: Map<string, { index: number; entry: NormalizedEntry }> = new Map();
+  private workspacePathCache: Map<string, string | null> = new Map();
 
   getName(): string {
     return 'CLAUDE_CODE';
@@ -105,10 +106,12 @@ export class ClaudeLogSource extends BaseExecutorLogSource {
 
         const dirPath = path.join(this.CLAUDE_PROJECTS_DIR, entry.name);
         const stats = await fs.stat(dirPath);
-        const readablePath = this.transformToReadable(entry.name);
+        const workspacePath = await this.resolveWorkspacePathHint(entry.name);
+        const readablePath = workspacePath ?? this.transformToReadable(entry.name);
+        const projectIdSource = workspacePath ?? entry.name;
 
         projects.push({
-          id: this.pathToId(entry.name),
+          id: this.pathToId(projectIdSource),
           name: readablePath,
           git_repo_path: readablePath,
           created_at: stats.birthtime,
@@ -130,19 +133,47 @@ export class ClaudeLogSource extends BaseExecutorLogSource {
     try {
       // プロジェクトIDからディレクトリ名を取得
       const dirName = this.idToPath(projectId);
-      const projectDir = path.join(this.CLAUDE_PROJECTS_DIR, dirName);
 
-      // ディレクトリの存在確認
-      try {
-        await fs.access(projectDir);
-      } catch {
-        console.warn(`[ClaudeLogSource] Project directory not found: ${projectDir}`);
+      const slugCandidates = new Set<string>();
+
+      if (dirName.startsWith('-')) {
+        slugCandidates.add(dirName);
+      }
+
+      if (dirName) {
+        slugCandidates.add(this.transformWorktreePath(dirName));
+        try {
+          const real = await fs.realpath(dirName);
+          slugCandidates.add(this.transformWorktreePath(real));
+        } catch {
+          // ignore realpath errors
+        }
+      }
+
+      let projectDir: string | null = null;
+      let projectSlug: string | null = null;
+      for (const slug of slugCandidates) {
+        const candidate = path.join(this.CLAUDE_PROJECTS_DIR, slug);
+        try {
+          await fs.access(candidate);
+          projectDir = candidate;
+          projectSlug = slug;
+          break;
+        } catch {
+          continue;
+        }
+      }
+
+      if (!projectDir) {
+        console.warn(`[ClaudeLogSource] Project directory not found for ${dirName}`);
         return [];
       }
 
       // .jsonlファイルを取得
       const entries = await fs.readdir(projectDir, { withFileTypes: true });
       const sessions: SessionInfo[] = [];
+
+      const resolvedWorkspace = await this.resolveWorkspacePathHint(projectSlug ?? dirName);
 
       for (const entry of entries) {
         if (!entry.isFile() || !entry.name.endsWith('.jsonl')) continue;
@@ -244,7 +275,7 @@ export class ClaudeLogSource extends BaseExecutorLogSource {
             ? normalizedFirstUserMessage
             : `Session ${sessionId.substring(0, 8)}`;
 
-        const fallbackWorkspaceRaw = this.transformToReadable(dirName);
+        const fallbackWorkspaceRaw = resolvedWorkspace ?? this.transformToReadable(projectSlug ?? dirName);
         const fallbackWorkspace =
           fallbackWorkspaceRaw && fallbackWorkspaceRaw.length > 0
             ? fallbackWorkspaceRaw.startsWith('/')
@@ -276,6 +307,108 @@ export class ClaudeLogSource extends BaseExecutorLogSource {
       console.error(`[ClaudeLogSource] Error reading sessions for project ${projectId}:`, error);
       return [];
     }
+  }
+
+  private async resolveWorkspacePathHint(identifier: string): Promise<string | null> {
+    if (this.workspacePathCache.has(identifier)) {
+      return this.workspacePathCache.get(identifier) ?? null;
+    }
+
+    const slug = identifier.startsWith('-') ? identifier : this.transformWorktreePath(identifier);
+
+    if (this.workspacePathCache.has(slug)) {
+      const cached = this.workspacePathCache.get(slug) ?? null;
+      this.workspacePathCache.set(identifier, cached);
+      return cached;
+    }
+
+    let resolved: string | null = null;
+
+    if (slug.startsWith('-')) {
+      const projectDir = path.join(this.CLAUDE_PROJECTS_DIR, slug);
+      try {
+        const entries = await fs.readdir(projectDir, { withFileTypes: true });
+        const jsonlFiles = entries
+          .filter((entry) => entry.isFile() && entry.name.endsWith('.jsonl'))
+          .sort((a, b) => a.name.localeCompare(b.name))
+          .slice(0, 5);
+
+        for (const file of jsonlFiles) {
+          const candidate = await this.extractWorkspacePathFromFile(path.join(projectDir, file.name));
+          if (candidate) {
+            resolved = candidate;
+            break;
+          }
+        }
+      } catch {
+        // ignore access errors
+      }
+    }
+
+    if (!resolved) {
+      if (identifier.startsWith('/')) {
+        resolved = identifier;
+      } else if (slug.startsWith('-')) {
+        resolved = this.transformToReadable(slug);
+      } else {
+        resolved = identifier;
+      }
+    }
+
+    this.workspacePathCache.set(identifier, resolved);
+    this.workspacePathCache.set(slug, resolved);
+    if (resolved) {
+      this.workspacePathCache.set(resolved, resolved);
+    }
+
+    return resolved;
+  }
+
+  private async extractWorkspacePathFromFile(filePath: string): Promise<string | null> {
+    try {
+      const content = await fs.readFile(filePath, 'utf-8');
+      const lines = content.split('\n');
+
+      const limit = Math.min(lines.length, 200);
+      for (let index = 0; index < limit; index += 1) {
+        const line = lines[index];
+        if (!line || !line.trim()) {
+          continue;
+        }
+
+        try {
+          const parsed = JSON.parse(line);
+          const candidate = this.extractWorkspaceCandidate(parsed);
+          if (candidate) {
+            return candidate;
+          }
+        } catch {
+          continue;
+        }
+      }
+    } catch {
+      // ignore read errors
+    }
+
+    return null;
+  }
+
+  private extractWorkspaceCandidate(payload: any): string | null {
+    const candidates = [
+      payload?.cwd,
+      payload?.message?.cwd
+    ];
+
+    for (const candidate of candidates) {
+      if (typeof candidate === 'string') {
+        const trimmed = candidate.trim();
+        if (trimmed.length > 0) {
+          return trimmed;
+        }
+      }
+    }
+
+    return null;
   }
 
   /**

@@ -200,7 +200,8 @@ ipcMain.handle('start-execution', async (event, { prompt, projectId }) => {
 });
 
 ipcMain.handle('get-projects', async () => {
-  return await logs.getAllProjects();
+  // CLAUDE_CODE だけをクエリ。引数を省略すると全プロファイルを取得。
+  return await logs.getAllProjects('CLAUDE_CODE');
 });
 
 ipcMain.handle('get-sessions', async (event, projectId) => {
@@ -258,9 +259,11 @@ program
 
 program
   .command('list-projects')
-  .action(async () => {
+  .option('--profile <profile>', 'Executor filter (e.g. CLAUDE_CODE)')
+  .action(async (options) => {
     const logs = new LogSourceFactory();
-    const projects = await logs.getAllProjects();
+    const filter = options.profile ? options.profile.toUpperCase() : undefined;
+    const projects = await logs.getAllProjects(filter);
     console.table(projects);
   });
 
