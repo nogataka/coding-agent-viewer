@@ -191,11 +191,12 @@ pnpm dev
 
 ### 🔨 サンプルコード
 
-実際に動くサンプルアプリケーション：
+実際に動くサンプルアプリケーション（各 README で手順を解説）：
 
-- **[Level 1 サンプル](./samples/level1-library/README.md)** - ライブラリ直接利用
-- **[Level 2 サンプル](./samples/level2-api/README.md)** - APIサーバー
-- **[Level 3 サンプル](./samples/level3-fullstack/README.md)** - フルスタック
+- **[Level 1](./samples/level1-library/README.md)** — SDK を直接呼び出す CLI 群
+- **[Level 2](./samples/level2-api/README.md)** — Express API + SSE サーバー
+- **[Level 3](./samples/level3-fullstack/README.md)** — Viewer 本体のフルスタック構成
+- **[Level 4](./samples/level4-custom/README.md)** — Web チャット UI（タスク実行 API + 正規化ログ）
 
 ---
 
@@ -233,7 +234,8 @@ coding-agent-viewer/
 ├── samples/           # サンプルアプリケーション
 │   ├── level1-library/   # SDK直接利用
 │   ├── level2-api/       # APIサーバー
-│   └── level3-fullstack/ # フルスタック
+│   ├── level3-fullstack/ # フルスタック
+│   └── level4-custom/    # Webチャット
 └── docs/
     └── public/        # ドキュメント
 ```
@@ -363,6 +365,7 @@ Level 2のAPIを使用して、カスタムフロントエンドやマイクロ�
 ### エンドユーザー
 Level 3のフルスタックアプリをそのまま使用、または必要に応じてカスタマイズ
 
----
+### SaaS / PoC チーム
+Level 4のWebチャットサンプルを基に、ブラウザからタスク実行 API とログストリームを利用する UI を素早く構築
 
-**Note**: このプロジェクトは元のRust実装のTypeScript/Node.js移植版です。API互換性は95%以上を維持しています。
+---
